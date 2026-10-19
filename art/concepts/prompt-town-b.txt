@@ -1,0 +1,7 @@
+Game concept art for a cozy fantasy MMORPG that plays on mobile and desktop. A whole riverside starter town seen from a high three-quarter camera (about 50 degrees looking down, perspective), like a classic 2000s MMORPG town map, rendered as a polished modern stylized 3D game screenshot.
+
+Our own art style: chunky, soft-edged low-poly shapes with chibi proportions, hand-painted gradient textures, no realistic detail. The town is a fantasy world inspired by Thai and Southeast Asian architecture, reimagined playfully (not real temples): wooden houses on stilts with steep, layered roofs whose gable ends curl up into chunky finials; dark-red and teal roof tiles with gold trim; warm teak wood walls; white plaster bases.
+
+Layout: a raised round stone platform in the centre with a glowing golden warp shrine; wide plank-and-stone roads leaving the plaza toward town gates in four directions; canals crossing the town with little wooden boats and arched bridges; a floating market of boats and stalls under colourful parasols; a guild hall with long banners, an inn, a blacksmith with smoke; lotus ponds, banana trees, palm trees, hanging paper lanterns, flower pots. Outside a low town wall: green rice paddies, round fluffy trees and a few cute slime monsters. Tiny chibi adventurers walking in the streets for scale.
+
+Soft warm golden-hour sunlight, gentle ambient occlusion, soft shadows, slight tilt-shift blur at the frame edges. Wide 16:9 image. No UI, no text, no logos, no watermark.

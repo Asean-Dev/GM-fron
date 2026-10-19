@@ -1,0 +1,7 @@
+Game concept art for a cozy fantasy MMORPG that plays on mobile and desktop. A whole starter town seen from a high three-quarter camera (about 50 degrees looking down, perspective), like a classic 2000s MMORPG town map, rendered as a polished modern stylized 3D game screenshot.
+
+Our own art style: chunky, soft-edged low-poly shapes with chibi proportions — oversized rounded roofs, short thick walls, slightly crooked friendly buildings; hand-painted gradient textures, no realistic detail. Bright, saturated but soft palette: terracotta-orange and cobalt-blue tiled roofs, cream plaster walls with warm wood beams, teal and mustard market awnings, lush lime-green grass, warm grey cobblestones.
+
+Layout: a round stone plaza in the centre with a fountain and a tall glowing blue warp crystal; four cobblestone main roads leave the plaza toward town gates in the north, south, east and west; a small river with two arched stone bridges runs along the east side; a market street lined with stalls; a guild hall with a large banner, a tall bell tower, an inn with a hanging sign, a blacksmith with chimney smoke; houses with flower boxes, lantern posts, low stone town walls around the edge. Outside the walls: rolling meadows, clusters of round fluffy trees and a few cute slime monsters. Tiny chibi adventurers walking in the streets for scale.
+
+Soft warm afternoon sunlight, gentle ambient occlusion, soft shadows, slight tilt-shift blur at the frame edges. Wide 16:9 image. No UI, no text, no logos, no watermark.
