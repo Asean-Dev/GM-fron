@@ -1,0 +1,62 @@
+// Wire protocol between the Unity client and the Rust map server.
+// Every frame on the TCP stream is a 4-byte big-endian length followed by one message.
+// After editing: Rust picks changes up on build; regenerate C# with `cargo run -p codegen`.
+syntax = "proto3";
+
+package gm;
+
+option csharp_namespace = "GM.Protocol";
+
+// ---------- client -> server ----------
+
+message ClientMsg {
+  oneof msg {
+    Hello hello = 1;
+    MoveTo move_to = 2;
+  }
+}
+
+// First message on a connection. The server answers with Welcome.
+message Hello {
+  string name = 1;
+}
+
+// Click-to-move request. The server walks the entity there one cell per tick.
+message MoveTo {
+  int32 x = 1;
+  int32 y = 2;
+}
+
+// ---------- server -> client ----------
+
+message ServerMsg {
+  oneof msg {
+    Welcome welcome = 1;
+    EntitySpawn spawn = 2;
+    EntityMove move = 3;
+    EntityDespawn despawn = 4;
+  }
+}
+
+message Welcome {
+  uint32 entity_id = 1;
+  uint32 map_width = 2;
+  uint32 map_height = 3;
+}
+
+message EntitySpawn {
+  uint32 entity_id = 1;
+  string name = 2;
+  int32 x = 3;
+  int32 y = 4;
+}
+
+message EntityMove {
+  uint32 entity_id = 1;
+  int32 x = 2;
+  int32 y = 3;
+}
+
+message EntityDespawn {
+  uint32 entity_id = 1;
+}

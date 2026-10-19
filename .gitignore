@@ -1,0 +1,33 @@
+.DS_Store
+
+# Rust
+server/target/
+
+# Unity (regenerated on open)
+client/[Ll]ibrary/
+client/[Tt]emp/
+client/[Oo]bj/
+client/[Bb]uild/
+client/[Bb]uilds/
+client/[Ll]ogs/
+client/[Uu]ser[Ss]ettings/
+client/[Mm]emoryCaptures/
+client/.vs/
+client/.idea/
+client/*.csproj
+client/*.sln
+client/*.slnx
+
+# NuGetForUnity restores these from Assets/packages.config
+client/Assets/Packages/
+client/Assets/Packages.meta
+
+# Python
+__pycache__/
+
+# Codex transcripts written next to generated images
+art/**/*-codex.log
+art/**/*-codex.txt
+
+# Regenerated from the Blender scene; the viewer loads town-glb.txt instead
+art/viewer/town.glb
