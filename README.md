@@ -2,6 +2,8 @@
 
 Ragnarok-style MMORPG prototype for mobile and desktop: a **Unity** client and an authoritative **Rust** map server.
 
+New to the project? Read [docs/HANDOFF.md](docs/HANDOFF.md) first (Thai and English): how everything was built, how to run it, and what's next.
+
 | Path | What |
 |---|---|
 | `proto/game.proto` | Wire protocol. The single source of truth for both sides. |
@@ -10,6 +12,7 @@ Ragnarok-style MMORPG prototype for mobile and desktop: a **Unity** client and a
 | `server/crates/bot` | Load-test bots that join and click-to-move at random. |
 | `server/crates/codegen` | Regenerates the client's C# protocol code. |
 | `client/` | Unity 6 project. `Assets/Scripts/Net/GameClient.cs` is the connection; `Assets/Scripts/Game/WorldView.cs` draws entities and sends clicks. |
+| `art/` | Town concepts, the Blender town builder, and two three.js pages: the whole-town viewer and the grass test meadow (`python3 art/serve.py`, then http://localhost:8765/). |
 
 ## Run it
 

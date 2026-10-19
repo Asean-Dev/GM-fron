@@ -1,8 +1,8 @@
 """Starter-town blockout for GM, built from art/concepts/concept-town-a.png.
 
-Run inside Blender (Blender MCP, or the Text Editor):
-    p = "/Users/asean/Desktop/GM-fron/art/tools/build_town.py"
-    exec(compile(open(p).read(), p, "exec"), {"__name__": "gm_town"})
+Run inside Blender (Blender MCP, or the Text Editor), with p pointing at this file in your clone:
+    p = "/path/to/GM-fron/art/tools/build_town.py"
+    exec(compile(open(p).read(), p, "exec"), {"__name__": "gm_town", "__file__": p})
 
 Builds into its own scene "GM Town" and leaves every other scene alone; rerunning rebuilds it.
 1 Blender unit = 1 server grid cell: cell (x, y) is Blender (x, y), on map-server's 100x100 map.
@@ -26,7 +26,7 @@ GATE_HALF = 3.0
 RIVER_W = 5.0
 SEED = 7
 SCENE = "GM Town"
-OUT_DIR = "/Users/asean/Desktop/GM-fron/art/maps/town"
+OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "maps", "town")
 
 # Walkability grid kinds: . = , walkable; # ~ blocked.
 FREE, ROAD, FIELD, BUILT, WATER = ".", "=", ",", "#", "~"
@@ -1105,6 +1105,8 @@ def grass(colls, grounds):
         mod = ob.modifiers.new("Grass", "NODES")
         mod.node_group = ng
         mod[density.identifier] = per_m2
+        # Render-only: drawing ~150k tufts live makes the viewport crawl.
+        mod.show_viewport = False
         # Grass receives shadows from buildings but casts none, which keeps it soft like painted grass.
         ob.visible_shadow = False
 
