@@ -1,0 +1,556 @@
+<title>GM Starter Town</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700&display=swap">
+<style>
+  /* Layout: the 3D town fills the screen; one floating parchment card (top-left) holds the controls,
+     a slim strip (bottom-left) reads out the grid cell under the pointer. */
+  :root {
+    --sky: #bfdcf3;
+    --ink: #22301f;
+    --muted: #5e6b56;
+    --card: rgba(251, 247, 236, 0.9);
+    --line: rgba(34, 48, 31, 0.14);
+    --accent: #2e5ec0;
+    --accent-ink: #ffffff;
+    --road: #9c8b75;
+    --blocked: #c4492f;
+    --sky-ink: #22301f;
+    --display: "Cinzel", "Trajan Pro", Georgia, serif;
+    --body: "Nunito Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink: #eef2e6; --muted: #aab6a1; --card: rgba(22, 29, 24, 0.88); --line: rgba(238, 242, 230, 0.16);
+      --accent: #86a8ff; --accent-ink: #0d1530; --road: #cdbb9f; --blocked: #ff8a6e; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink: #eef2e6; --muted: #aab6a1; --card: rgba(22, 29, 24, 0.88); --line: rgba(238, 242, 230, 0.16);
+    --accent: #86a8ff; --accent-ink: #0d1530; --road: #cdbb9f; --blocked: #ff8a6e; color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body {
+    background: var(--sky); color: var(--ink); font-family: var(--body); overflow: hidden;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  #stage { position: fixed; inset: 0; }
+  #stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+
+  .card {
+    position: fixed; z-index: 2;
+    top: calc(env(safe-area-inset-top, 0px) + 12px);
+    left: max(16px, env(safe-area-inset-left, 0px));
+    width: min(300px, calc(100vw - 32px));
+    display: grid; gap: 12px; padding: 14px 16px 16px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 10px 30px rgba(20, 40, 20, 0.18);
+  }
+  .card header { display: flex; align-items: start; justify-content: space-between; gap: 8px; }
+  h1 { margin: 0; font: 700 1.15rem/1.15 var(--display); letter-spacing: 0.04em; text-wrap: balance; }
+  .sub { margin: 2px 0 0; font-size: 0.78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .fold {
+    border: 1px solid var(--line); background: transparent; color: var(--muted);
+    border-radius: 8px; font: 600 0.72rem var(--body); padding: 4px 8px; cursor: pointer;
+  }
+  .card.folded .body { display: none; }
+  .body { display: grid; gap: 12px; }
+  .group { display: grid; gap: 6px; }
+  .label { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+  .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+  .seg button {
+    border: 0; background: transparent; color: var(--ink); padding: 7px 6px; cursor: pointer;
+    font: 600 0.8rem var(--body);
+  }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+  .seg button:focus-visible, .fold:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .hint { margin: 0; font-size: 0.74rem; line-height: 1.45; color: var(--muted); }
+
+  .readout {
+    position: fixed; z-index: 2;
+    left: max(16px, env(safe-area-inset-left, 0px));
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+    display: flex; align-items: center; gap: 8px; padding: 7px 12px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 999px;
+    font-size: 0.8rem; font-variant-numeric: tabular-nums;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  }
+  .dot { width: 10px; height: 10px; border-radius: 3px; background: var(--road); flex: none; }
+  .readout[data-walk="no"] .dot { background: var(--blocked); }
+
+  .loading {
+    position: fixed; inset: 0; z-index: 3; display: grid; place-items: center; text-align: center;
+    background: var(--sky); color: var(--sky-ink); transition: opacity 0.6s ease;
+  }
+  .loading p { margin: 6px 0 0; font-size: 0.85rem; }
+  .loading strong { font: 700 1.4rem var(--display); letter-spacing: 0.05em; }
+  .loading.done { opacity: 0; pointer-events: none; }
+  @media (prefers-reduced-motion: reduce) { .loading { transition: none; } }
+</style>
+
+<div id="stage" aria-label="3D view of the GM starter town"></div>
+
+<section class="card" id="card">
+  <header>
+    <div>
+      <h1>GM Starter Town</h1>
+      <p class="sub">Concept A &middot; 100 &times; 100 server cells</p>
+    </div>
+    <button class="fold" id="fold" aria-expanded="true">Hide</button>
+  </header>
+  <div class="body">
+    <div class="group">
+      <span class="label" id="view-label">Camera</span>
+      <div class="seg" role="group" aria-labelledby="view-label">
+        <button id="view-overview" data-view="overview" aria-pressed="true">Whole town</button>
+        <button id="view-street" data-view="street" aria-pressed="false">Street level</button>
+      </div>
+    </div>
+    <div class="group">
+      <span class="label" id="grass-label">Grass</span>
+      <div class="seg" role="group" aria-labelledby="grass-label">
+        <button id="grass-low" data-grass="low" aria-pressed="false">Light</button>
+        <button id="grass-medium" data-grass="medium" aria-pressed="true">Normal</button>
+        <button id="grass-high" data-grass="high" aria-pressed="false">Lush</button>
+      </div>
+    </div>
+    <p class="hint" id="hint">Drag to orbit. Scroll or pinch to zoom. Right-drag or two fingers to pan. Point at the ground to read a cell.</p>
+  </div>
+</section>
+
+<div class="readout" id="readout" data-walk="yes" aria-live="polite">
+  <span class="dot" aria-hidden="true"></span><span id="cell">Point at the ground</span>
+</div>
+
+<div class="loading" id="loading">
+  <div><strong>GM Starter Town</strong><p id="load-msg">Loading the town&hellip;</p></div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
+
+// Blender/server grid (x, y) -> three.js world. The glTF export turned Blender Z-up into Y-up.
+const W = (x, y, h = 0) => new THREE.Vector3(x, h, -y);
+const CENTER = W(50, 50);
+const MASK = { x0: -45, size: 190, ppu: 4 };
+const coarse = matchMedia("(pointer: coarse)").matches;
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const $ = (id) => document.getElementById(id);
+const loadMsg = $("load-msg");
+
+function fail(text) {
+  loadMsg.textContent = text;
+}
+
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+} catch (e) {
+  fail("This browser could not start WebGL, so the 3D town cannot be shown.");
+  throw e;
+}
+renderer.setPixelRatio(Math.min(devicePixelRatio, coarse ? 1.5 : 1.75));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.AgXToneMapping;
+renderer.toneMappingExposure = 1.08;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+$("stage").appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const sky = new THREE.Color("#bfdcf3");
+scene.background = sky;
+scene.fog = new THREE.Fog(sky, 230, 520);
+
+const camera = new THREE.PerspectiveCamera(36, innerWidth / innerHeight, 0.3, 1200);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.maxPolarAngle = 1.32;
+controls.minDistance = 6;
+controls.maxDistance = 300;
+
+// Sun from the south-west, matching the Blender renders.
+const hemi = new THREE.HemisphereLight(0xd8ecff, 0x5f8240, 1.3);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff0d8, 2.5);
+const sunDir = new THREE.Vector3(-0.443, 0.695, 0.567).normalize();
+sun.position.copy(CENTER).addScaledVector(sunDir, 160);
+sun.target.position.copy(CENTER);
+sun.castShadow = true;
+sun.shadow.mapSize.set(coarse ? 2048 : 4096, coarse ? 2048 : 4096);
+Object.assign(sun.shadow.camera, { left: -78, right: 78, top: 78, bottom: -78, near: 10, far: 400 });
+sun.shadow.bias = -0.0004;
+sun.shadow.normalBias = 0.04;
+scene.add(sun, sun.target);
+const glow = new THREE.PointLight(0x5fb8ff, 40, 16, 2);
+glow.position.copy(W(50, 50, 3.4));
+scene.add(glow);
+
+// ---------- shader patches: drifting cloud shadows everywhere, procedural grass and paving
+
+const time = { value: 0 };
+const NOISE = /* glsl */ `
+  uniform float uTime;
+  varying vec3 vWorld;
+  float gmHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float gmNoise(vec2 p) {
+    vec2 i = floor(p), f = fract(p), u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(gmHash(i), gmHash(i + vec2(1, 0)), u.x), mix(gmHash(i + vec2(0, 1)), gmHash(i + vec2(1, 1)), u.x), u.y);
+  }
+  float gmFbm(vec2 p) { float v = 0.0, a = 0.5; for (int k = 0; k < 4; k++) { v += a * gmNoise(p); p *= 2.03; a *= 0.5; } return v; }
+  float gmCloud(vec2 xz) {
+    float n = gmFbm(xz * 0.022 + vec2(uTime * 0.014, uTime * 0.007));
+    return mix(1.0, 0.62, smoothstep(0.5, 0.62, n));
+  }
+`;
+const GRASS_COLOR = /* glsl */ `
+  uniform vec3 uRoot, uMid, uTip, uCool, uWarm;
+  vec3 gmGrass(float tip, vec2 xz) {
+    vec3 base = tip < 0.55 ? mix(uRoot, uMid, tip / 0.55) : mix(uMid, uTip, (tip - 0.55) / 0.45);
+    vec3 tint = mix(uCool, uWarm, smoothstep(0.38, 0.66, gmFbm(xz * 0.07)));
+    return base * tint;
+  }
+`;
+const grassUniforms = {
+  uRoot: { value: new THREE.Color("#4f9a3a") }, uMid: { value: new THREE.Color("#74c447") },
+  uTip: { value: new THREE.Color("#c8ee7c") }, uCool: { value: new THREE.Color("#d9f0e6") },
+  uWarm: { value: new THREE.Color("#fff7cf") },
+};
+
+// opts.instanced: the mesh is an InstancedMesh with identity transform; opts.wind: sway by the 'tip' attribute;
+// opts.fragColor: GLSL that sets diffuseColor.rgb (may use vWorld, vTip).
+function patch(material, opts = {}) {
+  material.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, { uTime: time }, opts.uniforms || {});
+    let vs = sh.vertexShader.replace("#include <common>", "#include <common>\nuniform float uTime;\nvarying vec3 vWorld;\n" +
+      (opts.wind ? "attribute float tip;\nvarying float vTip;\n" : ""));
+    if (opts.instanced) {
+      vs = vs.replace("#include <project_vertex>", /* glsl */ `
+        vec4 mvPosition = instanceMatrix * vec4(transformed, 1.0);
+        vWorld = mvPosition.xyz;
+        ${opts.wind ? `vTip = tip;
+        float gust = sin(uTime * 1.6 + vWorld.x * 0.31 + vWorld.z * 0.22) * 0.5 + 0.5;
+        mvPosition.xz += vec2(0.7, -0.5) * (0.05 + 0.1 * gust) * tip * tip;` : ""}
+        mvPosition = modelViewMatrix * mvPosition;
+        gl_Position = projectionMatrix * mvPosition;`);
+    } else {
+      vs = vs.replace("#include <project_vertex>", "#include <project_vertex>\nvWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;");
+    }
+    sh.vertexShader = vs;
+    let fs = sh.fragmentShader.replace("#include <common>", "#include <common>\n" + NOISE + (opts.fragHeader || "") +
+      (opts.wind ? "varying float vTip;\n" : ""));
+    if (opts.fragColor) fs = fs.replace("#include <color_fragment>", "#include <color_fragment>\n" + opts.fragColor);
+    // Double-sided blades would flip the normal on their back faces and turn dark; keep it pointing up.
+    if (opts.wind) fs = fs.replace("#include <normal_fragment_begin>", "float faceDirection = 1.0;\nvec3 normal = normalize(vNormal);\nvec3 nonPerturbedNormal = normal;");
+    // Clouds only block the sun: dim direct light, keep sky light.
+    fs = fs.replace("#include <aomap_fragment>", "float gmShade = gmCloud(vWorld.xz);\nreflectedLight.directDiffuse *= gmShade;\nreflectedLight.directSpecular *= gmShade;\n#include <aomap_fragment>");
+    sh.fragmentShader = fs;
+  };
+  material.customProgramCacheKey = () => JSON.stringify([!!opts.instanced, !!opts.wind, opts.key || ""]);
+  return material;
+}
+
+const PAVING = /* glsl */ `
+  uniform vec3 uLight, uDark; uniform float uScale;
+  vec2 gmCells(vec2 p) {
+    vec2 i = floor(p), f = fract(p); float d1 = 9.0, d2 = 9.0; float id = 0.0;
+    for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+      vec2 g = vec2(x, y), o = vec2(gmHash(i + g), gmHash(i + g + 17.3));
+      float d = length(g + o - f);
+      if (d < d1) { d2 = d1; d1 = d; id = gmHash(i + g + 3.1); } else if (d < d2) { d2 = d; }
+    }
+    return vec2(d2 - d1, id);
+  }
+`;
+function paving(light, dark, scale) {
+  return patch(new THREE.MeshStandardMaterial({ roughness: 0.92 }), {
+    key: "paving",
+    uniforms: { uLight: { value: new THREE.Color(light) }, uDark: { value: new THREE.Color(dark) }, uScale: { value: scale } },
+    fragHeader: PAVING,
+    fragColor: "vec2 c = gmCells(vWorld.xz * uScale); diffuseColor.rgb = mix(uDark, uLight * (0.9 + 0.2 * c.y), smoothstep(0.04, 0.16, c.x));",
+  });
+}
+function dirt(light, dark) {
+  return patch(new THREE.MeshStandardMaterial({ roughness: 0.95 }), {
+    key: "dirt",
+    uniforms: { uLight: { value: new THREE.Color(light) }, uDark: { value: new THREE.Color(dark) } },
+    fragHeader: "uniform vec3 uLight, uDark;\n",
+    fragColor: "diffuseColor.rgb = mix(uDark, uLight, smoothstep(0.35, 0.65, gmFbm(vWorld.xz * 0.4)));",
+  });
+}
+
+// ---------- ground
+
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(700, 700).rotateX(-Math.PI / 2),
+  patch(new THREE.MeshLambertMaterial(), {
+    key: "ground", uniforms: grassUniforms, fragHeader: GRASS_COLOR,
+    fragColor: "diffuseColor.rgb = gmGrass(0.12, vWorld.xz);",
+  }),
+);
+ground.position.copy(CENTER);
+ground.receiveShadow = true;
+scene.add(ground);
+
+// ---------- grass tufts
+
+function mulberry32(a) {
+  return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+function tuftGeometry() {
+  const rand = mulberry32(11), pos = [], tip = [], idx = [];
+  for (let b = 0; b < 4; b++) {
+    const a = rand() * Math.PI * 2, lean = 0.15 + rand() * 0.35, h = 0.22 + rand() * 0.14, w = 0.07 + rand() * 0.03;
+    const bx = (rand() - 0.5) * 0.18, bz = (rand() - 0.5) * 0.18;
+    const ox = Math.cos(a), oz = Math.sin(a), sx = -Math.sin(a), sz = Math.cos(a);
+    const mx = bx + ox * lean * h * 0.35, mz = bz + oz * lean * h * 0.35, tx = bx + ox * lean * h, tz = bz + oz * lean * h;
+    const i = pos.length / 3;
+    pos.push(bx - sx * w / 2, 0, bz - sz * w / 2, bx + sx * w / 2, 0, bz + sz * w / 2,
+      mx + sx * w * 0.35, h * 0.55, mz + sz * w * 0.35, mx - sx * w * 0.35, h * 0.55, mz - sz * w * 0.35, tx, h, tz);
+    tip.push(0, 0, 0.55, 0.55, 1);
+    idx.push(i, i + 1, i + 2, i, i + 2, i + 3, i + 3, i + 2, i + 4);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  // Normals point up so each tuft shades as one soft mass, like painted grass.
+  g.setAttribute("normal", new THREE.Float32BufferAttribute(pos.map((_, k) => (k % 3 === 1 ? 1 : 0)), 3));
+  g.setAttribute("tip", new THREE.Float32BufferAttribute(tip, 1));
+  g.setIndex(idx);
+  return g;
+}
+const tuft = tuftGeometry();
+const grassMat = patch(new THREE.MeshLambertMaterial({ side: THREE.DoubleSide }), {
+  key: "grass", instanced: true, wind: true, uniforms: grassUniforms, fragHeader: GRASS_COLOR,
+  fragColor: "diffuseColor.rgb = gmGrass(vTip, vWorld.xz);",
+});
+const DENSITY = { low: [8, 1.5], medium: [14, 3], high: [26, 6] }; // tufts per m², [on the map, around it]
+let grassChunks = [];
+let mask = null;
+
+function buildGrass(level) {
+  grassChunks.forEach((m) => { scene.remove(m); m.dispose(); });
+  grassChunks = [];
+  const [dIn, dOut] = DENSITY[level];
+  const rand = mulberry32(7), CH = 19, n = MASK.size / CH, px = MASK.size * MASK.ppu;
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+  let total = 0;
+  for (let cy = 0; cy < n; cy++) for (let cx = 0; cx < n; cx++) {
+    const mats = [];
+    const tries = Math.round(CH * CH * dIn);
+    for (let k = 0; k < tries; k++) {
+      const x = MASK.x0 + (cx + rand()) * CH, y = MASK.x0 + (cy + rand()) * CH;
+      const inMap = x >= -0.5 && x < 99.5 && y >= -0.5 && y < 99.5;
+      if (!inMap && rand() > dOut / dIn) continue;
+      const ix = Math.floor((x - MASK.x0) * MASK.ppu), iy = px - 1 - Math.floor((y - MASK.x0) * MASK.ppu);
+      if (mask[(iy * px + ix) * 4] < 128) continue;
+      q.setFromAxisAngle(up, rand() * Math.PI * 2);
+      const sc = 0.75 + rand() * 0.7;
+      m4.compose(p.set(x, 0, -y), q, s.set(sc, sc, sc));
+      mats.push(m4.clone());
+    }
+    if (!mats.length) continue;
+    const mesh = new THREE.InstancedMesh(tuft, grassMat, mats.length);
+    mats.forEach((m, i) => mesh.setMatrixAt(i, m));
+    mesh.computeBoundingSphere();
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+    grassChunks.push(mesh);
+    total += mats.length;
+  }
+  document.querySelectorAll("[data-grass]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.grass === level)));
+  return total;
+}
+
+// ---------- town model
+
+const FLAT = new Set(["River", "Roads", "FarmTracks", "Field", "Field.001"]);
+const SPECIAL = {
+  GM_cobble: () => paving("#e2d2b4", "#97876f", 2.4),
+  GM_plaza: () => paving("#ecdcbd", "#9c8b75", 2.2),
+  GM_dirt: () => dirt("#d2ad72", "#b38c55"),
+};
+const replaced = {};
+
+async function loadTown(onProgress) {
+  const draco = new DRACOLoader().setDecoderPath("draco/").setDecoderConfig({ type: "js" });
+  const loader = new GLTFLoader().setDRACOLoader(draco);
+  // The model ships as base64 text (town-glb.txt) because the host serves text files, not .glb.
+  const res = await fetch("town-glb.txt");
+  if (!res.ok) throw new Error(`town-glb.txt: HTTP ${res.status}`);
+  const total = Number(res.headers.get("content-length")) || 0;
+  const reader = res.body.getReader();
+  const parts = [];
+  let got = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    parts.push(value);
+    got += value.length;
+    if (total) onProgress(got / total);
+  }
+  const b64 = new TextDecoder().decode(await new Blob(parts).arrayBuffer());
+  const bin = atob(b64.trim());
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const gltf = await loader.parseAsync(bytes.buffer, "");
+  gltf.scene.traverse((o) => {
+    if (!o.isMesh) return;
+    const top = o.parent && o.parent.type === "Object3D" && o.parent !== gltf.scene ? o.parent.name : o.name;
+    o.castShadow = !FLAT.has(top) && !FLAT.has(o.name);
+    o.receiveShadow = true;
+    const fix = (m) => {
+      if (SPECIAL[m.name]) return (replaced[m.name] ||= SPECIAL[m.name]());
+      if (!m.userData.gmPatched) { patch(m, { key: "std" }); m.userData.gmPatched = true; }
+      return m;
+    };
+    o.material = Array.isArray(o.material) ? o.material.map(fix) : fix(o.material);
+  });
+  scene.add(gltf.scene);
+  draco.dispose();
+}
+
+async function loadMask() {
+  const img = new Image();
+  img.src = "grassmask.png";
+  await img.decode();
+  const c = document.createElement("canvas");
+  c.width = img.width; c.height = img.height;
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(img, 0, 0);
+  return ctx.getImageData(0, 0, c.width, c.height).data;
+}
+
+let walk = null;
+async function loadWalkable() {
+  const text = await (await fetch("walkable.txt")).text();
+  walk = text.split("\n").filter((l) => l && !l.startsWith("#"));
+}
+
+// ---------- cameras
+
+const VIEWS = {
+  overview: { target: W(50, 51), dist: 168, pitch: 58 },
+  street: { target: W(55, 41), dist: 30, pitch: 50 },
+};
+function viewPose(v) {
+  const p = THREE.MathUtils.degToRad(v.pitch);
+  return { target: v.target.clone(), pos: v.target.clone().add(new THREE.Vector3(0, v.dist * Math.sin(p), v.dist * Math.cos(p))) };
+}
+let tween = null;
+function setView(name, instant = false) {
+  const to = viewPose(VIEWS[name]);
+  document.querySelectorAll("[data-view]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.view === name)));
+  if (instant || reduced) {
+    camera.position.copy(to.pos); controls.target.copy(to.target); controls.update(); tween = null; return;
+  }
+  tween = { t0: performance.now(), fromPos: camera.position.clone(), fromTarget: controls.target.clone(), to };
+}
+function stepTween(now) {
+  if (!tween) return;
+  const k = Math.min(1, (now - tween.t0) / 1300), e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+  camera.position.lerpVectors(tween.fromPos, tween.to.pos, e);
+  controls.target.lerpVectors(tween.fromTarget, tween.to.target, e);
+  if (k === 1) tween = null;
+}
+controls.addEventListener("start", () => { tween = null; });
+
+// ---------- cell readout
+
+const KIND = { ".": ["Grass", true], "=": ["Road", true], ",": ["Field", true], "#": ["Building, wall or tree", false], "~": ["Water", false] };
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), floor = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit = new THREE.Vector3();
+const marker = new THREE.LineSegments(
+  new THREE.EdgesGeometry(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2)),
+  new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthTest: false }),
+);
+marker.visible = false;
+marker.renderOrder = 10;
+scene.add(marker);
+function readCell(clientX, clientY) {
+  if (!walk) return;
+  ndc.set((clientX / innerWidth) * 2 - 1, -(clientY / innerHeight) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  if (!ray.ray.intersectPlane(floor, hit)) return;
+  const x = Math.round(hit.x), y = Math.round(-hit.z);
+  const out = $("readout");
+  if (x < 0 || y < 0 || x > 99 || y > 99) {
+    marker.visible = false; out.dataset.walk = "yes"; $("cell").textContent = "Outside the 100 \u00d7 100 map"; return;
+  }
+  const [name, ok] = KIND[walk[99 - y][x]] || ["Unknown", false];
+  marker.position.set(x, 0.08, -y);
+  marker.material.color.set(ok ? 0xffffff : 0xff6a4a);
+  marker.visible = true;
+  out.dataset.walk = ok ? "yes" : "no";
+  $("cell").textContent = `Cell ${x}, ${y} \u00b7 ${name} \u00b7 ${ok ? "walkable" : "blocked"}`;
+}
+renderer.domElement.addEventListener("pointermove", (e) => { if (e.pointerType === "mouse") readCell(e.clientX, e.clientY); });
+renderer.domElement.addEventListener("pointerup", (e) => readCell(e.clientX, e.clientY));
+
+// ---------- UI
+
+document.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
+document.querySelectorAll("[data-grass]").forEach((b) => b.addEventListener("click", () => {
+  const n = buildGrass(b.dataset.grass);
+  $("hint").dataset.tufts = n;
+}));
+$("fold").addEventListener("click", () => {
+  const folded = $("card").classList.toggle("folded");
+  $("fold").textContent = folded ? "Show" : "Hide";
+  $("fold").setAttribute("aria-expanded", String(!folded));
+});
+if (innerWidth < 520) $("fold").click();
+
+addEventListener("resize", () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// ---------- start
+
+setView("overview", true);
+try {
+  const progress = (f) => { loadMsg.textContent = `Loading the town\u2026 ${Math.round(f * 100)}%`; };
+  [mask] = await Promise.all([loadMask(), loadTown(progress), loadWalkable()]);
+  loadMsg.textContent = "Planting grass\u2026";
+  await new Promise((r) => setTimeout(r, 30));
+  buildGrass(coarse ? "low" : "medium");
+  $("loading").classList.add("done");
+} catch (e) {
+  console.error(e);
+  fail("The town failed to load. Reload the page to try again.");
+}
+
+// If the first seconds run slowly, drop to light grass so the view stays smooth.
+let frames = 0, since = 0, checked = false;
+renderer.setAnimationLoop((now) => {
+  time.value = reduced ? 0 : now / 1000;
+  stepTween(now);
+  controls.update();
+  renderer.render(scene, camera);
+  if (!checked && grassChunks.length) {
+    if (!since) since = now;
+    frames++;
+    if (now - since > 3000) {
+      checked = true;
+      if (frames / ((now - since) / 1000) < 28 && !coarse) {
+        renderer.setPixelRatio(1);
+        buildGrass("low");
+      }
+    }
+  }
+});
+window.gmReady = () => grassChunks.length > 0;
+</script>
