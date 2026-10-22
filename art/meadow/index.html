@@ -58,6 +58,37 @@
   .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
   .seg button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .hint { margin: 0; font-size: 0.74rem; line-height: 1.45; color: var(--muted); }
+  .bump { display: inline-block; animation: bump 0.35s ease-out; }
+  @keyframes bump { 40% { transform: scale(1.45); color: var(--accent); } }
+  @media (prefers-reduced-motion: reduce) { .bump { animation: none; } }
+  /* The dock along the bottom: what a click does (Walk / Clear / Plot), plot size and progress, and the Pick Up prompt
+     that shows while the hero stands by a log. */
+  .dock {
+    position: fixed; z-index: 3; left: 50%; transform: translateX(-50%);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    width: max-content; max-width: calc(100vw - 32px); pointer-events: none;
+  }
+  .dock > * { pointer-events: auto; }
+  .dock .seg, .plotbar {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 8px 24px rgba(20, 40, 20, 0.22);
+  }
+  .toolbar button { padding: 9px 14px; font-size: 0.86rem; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+  .dock kbd { font: 700 0.68rem var(--body); padding: 0 5px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); }
+  .dock button[aria-pressed="true"] kbd { color: inherit; border-color: currentColor; }
+  .plotbar { display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 14px; font: 600 0.82rem var(--body); color: var(--ink); font-variant-numeric: tabular-nums; }
+  .plotbar button { border: 0; border-radius: 8px; padding: 6px 12px; font: 700 0.8rem var(--body); cursor: pointer; background: var(--accent); color: var(--accent-ink); }
+  .plotbar #plot-remove { background: transparent; color: var(--muted); padding: 6px 8px; }
+  .plotbar button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (pointer: coarse) { .dock kbd { display: none; } }
+  .pickup {
+    display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px;
+    background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 999px;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 8px 24px rgba(20, 40, 20, 0.22); font: 700 0.9rem var(--body); cursor: pointer;
+  }
+  .pickup:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 </style>
 
 <div id="stage" aria-label="3D grass meadow"></div>
@@ -70,6 +101,13 @@
     <label class="label" for="wind">Wind <output id="wind-out">Breeze</output></label>
     <input id="wind" type="range" min="0" max="1" step="0.01" value="0.35">
     <div class="ticks" aria-hidden="true"><span>Calm</span><span>Breeze</span><span>Storm</span></div>
+  </div>
+  <div class="group">
+    <span class="label" id="look-label">Light</span>
+    <div class="seg" role="group" aria-labelledby="look-label">
+      <button data-look="golden" aria-pressed="true">Golden hour</button>
+      <button data-look="day" aria-pressed="false">Day</button>
+    </div>
   </div>
   <div class="group">
     <span class="label" id="density-label">Grass</span>
@@ -86,8 +124,37 @@
       <button id="cam-free" data-cam="free" aria-pressed="false">Free</button>
     </div>
   </div>
-  <p class="hint">Click or tap the grass to walk there. Drag to orbit, scroll or pinch to zoom.</p>
+  <div class="group">
+    <span class="label" id="mount-label">Mounts</span>
+    <div class="seg" role="group" aria-labelledby="mount-label">
+      <button data-ride="horse" aria-pressed="false">Horse</button>
+      <button data-ride="bird" aria-pressed="false">Thunder Runner</button>
+      <button data-ride="serpent" aria-pressed="false">Lantern Serpent</button>
+    </div>
+  </div>
+  <div class="group">
+    <span class="label">Wood <output id="wood-out">0</output></span>
+  </div>
+  <p class="hint" id="hint">Click or tap the grass to walk there. Click a tree to swing your axe (one click, one swing); when it falls, pick up its logs. Click a mount to ride it. Drag to orbit, scroll or pinch to zoom.</p>
 </section>
+<div class="dock">
+  <button class="pickup" id="pickup" hidden>Pick Up <kbd>E</kbd></button>
+  <div class="plotbar" id="plotbar" hidden>
+    <span id="plot-text"></span>
+    <button id="plot-work">Work on plot</button>
+    <button id="plot-remove" aria-label="Remove plot" title="Remove plot">✕</button>
+  </div>
+  <div class="seg sizes" id="plot-sizes" role="group" aria-label="Plot size" hidden>
+    <button data-size="4" aria-pressed="false">4×4</button>
+    <button data-size="6" aria-pressed="true">6×6</button>
+    <button data-size="8" aria-pressed="false">8×8</button>
+  </div>
+  <div class="seg toolbar" role="group" aria-label="What a click does">
+    <button data-mode="walk" aria-pressed="true">Walk <kbd>1</kbd></button>
+    <button data-mode="clear" aria-pressed="false">Clear <kbd>2</kbd></button>
+    <button data-mode="plot" aria-pressed="false">Plot <kbd>3</kbd></button>
+  </div>
+</div>
 
 <script type="importmap">
 { "imports": {
@@ -98,6 +165,9 @@
 <script type="module">
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { Reflector } from "three/addons/objects/Reflector.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
 const FIELD = 44;      // grass covers FIELD x FIELD metres (1 m = 1 server cell), centred on the origin
 const coarse = matchMedia("(pointer: coarse)").matches;
@@ -114,9 +184,10 @@ $("stage").appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.1, 400);
 camera.position.set(0, 15, 13);
+camera.layers.enable(1);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
-controls.maxPolarAngle = 1.25;
+controls.maxPolarAngle = 1.41;   // low enough to look along the ground at the sky
 controls.minDistance = 3;
 controls.maxDistance = 45;
 
@@ -136,10 +207,35 @@ function pathDistance(x, z) {
 }
 const PATH_HALF = 1.1;
 
+// ---------- the lake: one shape shared with the shaders, so shore, depth and foam always line up
+
+const LAKE = { x: 10, z: 12, r: 8 };
+function lakeDistance(x, z) { // < 0 inside the lake, roughly metres to the shore
+  const dx = x - LAKE.x, dz = (z - LAKE.z) / 0.8, a = Math.atan2(dz, dx);
+  return Math.hypot(dx, dz) - LAKE.r - 1.1 * Math.sin(a * 3 + 0.7) - 0.6 * Math.sin(a * 5 + 2.1);
+}
+// A wide shallow shelf to wade on for the first 2.5 m, then the basin drops away to 2.6 m deep.
+function groundHeight(x, z) {
+  const s = -lakeDistance(x, z);
+  return s <= 0 ? 0 : -(0.18 * Math.min(s, 2.5) + 2.15 * THREE.MathUtils.smoothstep(s, 2.5, 6.5));
+}
+const waterLevel = (t) => -0.03 + 0.02 * Math.sin(t * 0.8) + 0.008 * Math.sin(t * 2.1 + 1.0); // matches the lake shader
+const WADE = -0.45; // deepest ground a walker will wade over (about waist deep)
+
 // ---------- shared GLSL: noise, wind, clouds, fog
 
 const COMMON = /* glsl */ `
   uniform float uTime, uWind, uStorm;
+  uniform vec3 uLake; // centre x, centre z, radius
+  float lakeDistance(vec2 p) {
+    vec2 q = vec2(p.x - uLake.x, (p.y - uLake.y) / 0.8);
+    float a = atan(q.y, q.x);
+    return length(q) - uLake.z - 1.1 * sin(a * 3.0 + 0.7) - 0.6 * sin(a * 5.0 + 2.1);
+  }
+  float groundHeight(vec2 p) {
+    float s = -lakeDistance(p);
+    return s <= 0.0 ? 0.0 : -(0.18 * min(s, 2.5) + 2.15 * smoothstep(2.5, 6.5, s));
+  }
   uniform vec2 uWindDir;
   float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float noise(vec2 p) {
@@ -182,20 +278,20 @@ const WIND_VERTEX = /* glsl */ `
 const SHADE = /* glsl */ `
   uniform vec3 uSky, uSunCol, uAmbient, uShadowTint;
   uniform float uSun, uFogNear, uFogFar;
-  uniform vec4 uWalkers[4]; // xy = shadow centre, z = radius (0 = unused)
+  uniform vec4 uWalkers[9]; // xy = shadow centre, z = radius (0 = unused)
   float blobShadow(vec2 xz) {
     float s = 1.0;
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 9; i++) {
       if (uWalkers[i].z <= 0.0) continue;
       float d = length(xz - uWalkers[i].xy) / uWalkers[i].z;
       s *= mix(0.4, 1.0, smoothstep(0.3, 1.0, d));
     }
     return s;
   }
-  uniform vec4 uTrees[16]; // xy = shadow centre on the ground, z = radius (0 = unused)
+  uniform vec4 uTrees[32]; // xy = shadow centre on the ground, z = radius (0 = unused)
   float treeShadow(vec2 xz) {
     float s = 1.0;
-    for (int i = 0; i < 16; i++) {
+    for (int i = 0; i < 32; i++) {
       if (uTrees[i].z <= 0.0) continue;
       float d = length(xz - uTrees[i].xy) / uTrees[i].z;
       if (d >= 1.2) continue;
@@ -229,6 +325,22 @@ const uniforms = {
   uCool: { value: colors.cool }, uWarm: { value: colors.warm },
   uDirt: { value: colors.dirt }, uDirtDark: { value: colors.dirtDark },
 };
+uniforms.uLake = { value: new THREE.Vector3(LAKE.x, LAKE.z, LAKE.r) };
+// Rings spreading from footsteps in the water: xy = where, z = start time, w = strength.
+const RIPPLES = 48;
+uniforms.uRipples = { value: Array.from({ length: RIPPLES }, () => new THREE.Vector4(0, 0, -100, 0)) };
+uniforms.uFeet = { value: Array.from({ length: 9 }, () => new THREE.Vector4()) }; // x, z, 1 when standing in water, foam ring radius
+let rippleNext = 0;
+function addRipple(x, z, strength) {
+  uniforms.uRipples.value[rippleNext].set(x, z, uniforms.uTime.value, strength);
+  rippleNext = (rippleNext + 1) % RIPPLES;
+}
+Object.assign(uniforms, {
+  uSand: { value: new THREE.Color("#e6cf9c") }, uSandWet: { value: new THREE.Color("#bf9a68") }, uBed: { value: new THREE.Color("#9c845d") },
+  uSoil: { value: new THREE.Color("#9a6f48") }, uSoilWet: { value: new THREE.Color("#5b3a24") }, uSoilPacked: { value: new THREE.Color("#c9a77c") },
+  uShallow: { value: new THREE.Color("#18c6b3") }, uMidWater: { value: new THREE.Color("#068dbd") }, uDeepWater: { value: new THREE.Color("#113d8a") },
+});
+
 // Trample map over the field, written on the CPU each frame and fading back over ~2 s.
 const TR = { n: 256, min: -24, size: 48 };
 const trData = new Uint8Array(TR.n * TR.n * 4);
@@ -238,8 +350,8 @@ trTex.magFilter = trTex.minFilter = THREE.LinearFilter;
 trTex.needsUpdate = true;
 uniforms.uTrample = { value: trTex };
 uniforms.uTrampleRect = { value: new THREE.Vector4(TR.min, TR.min, TR.size, 0) };
-uniforms.uWalkers = { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) };
-uniforms.uTrees = { value: Array.from({ length: 16 }, () => new THREE.Vector4()) };
+uniforms.uWalkers = { value: Array.from({ length: 9 }, () => new THREE.Vector4()) };
+uniforms.uTrees = { value: Array.from({ length: 32 }, () => new THREE.Vector4()) };
 
 function fadeTrample(dt) {
   const f = Math.exp(-dt / 1.8);
@@ -259,6 +371,157 @@ function stampTrample(x, z, radius) {
       trData[k + 2] = strength;
     }
   }
+}
+
+// ---------- the land map: how much grass grows on each patch of ground, so cleared ground stays bare and grass creeps
+// back in from the edges. It covers the same square as the trample map: r = grass growth (0 bare, 1 full), g = levelled
+// for building (grass never comes back), b = soil wetness (freshly dug earth is dark, then dries). The data lives in
+// the typed arrays below and goes to the GPU at most four times a second.
+// regrowDelay: seconds before cut grass starts sprouting; regrowTime: seconds for a patch beside full grass to fill
+// in; base: the share of that rate a patch with no grass near it still gets; blur: texels round a patch that count
+// as "near"; dryTime: seconds for dug soil to dry.
+const LAND = { n: 256, min: -24, size: 48, regrowDelay: 30, regrowTime: 90, base: 0.04, blur: 4, dryTime: 40 };
+const LN = LAND.n, landTexel = LAND.size / LN;
+const land = {
+  grow: new Float32Array(LN * LN).fill(1), level: new Float32Array(LN * LN), wet: new Float32Array(LN * LN),
+  rest: new Float32Array(LN * LN), fertile: new Float32Array(LN * LN), near: new Float32Array(LN * LN), tmp: new Float32Array(LN * LN),
+  growing: false, drying: false, dirty: true, clock: 0,
+};
+// Grass grows everywhere in the field except the path, the beach and the lake.
+for (let iz = 0; iz < LN; iz++) for (let ix = 0; ix < LN; ix++) {
+  const x = LAND.min + (ix + 0.5) * landTexel, z = LAND.min + (iz + 0.5) * landTexel;
+  land.fertile[iz * LN + ix] = Math.abs(x) < FIELD / 2 && Math.abs(z) < FIELD / 2 && pathDistance(x, z) > PATH_HALF + 0.1 && lakeDistance(x, z) > 1.3 ? 1 : 0;
+}
+const landData = new Uint8Array(LN * LN * 4);
+const landTex = new THREE.DataTexture(landData, LN, LN, THREE.RGBAFormat);
+landTex.magFilter = landTex.minFilter = THREE.LinearFilter;
+uniforms.uLand = { value: landTex };
+uniforms.uLandRect = { value: new THREE.Vector4(LAND.min, LAND.min, LAND.size, 0) };
+const LAND_GLSL = /* glsl */ `
+  uniform sampler2D uLand;
+  uniform vec4 uLandRect;
+  vec4 landAt(vec2 xz) { return texture2D(uLand, (xz - uLandRect.xy) / uLandRect.z); }
+`;
+function uploadLand() {
+  for (let i = 0, k = 0; i < LN * LN; i++, k += 4) {
+    landData[k] = land.grow[i] * 255;
+    landData[k + 1] = land.level[i] * 255;
+    landData[k + 2] = land.wet[i] * 255;
+    landData[k + 3] = 255;
+  }
+  landTex.needsUpdate = true;
+  land.dirty = false;
+}
+uploadLand();
+const landIndex = (x, z) => {
+  const ix = Math.floor((x - LAND.min) / landTexel), iz = Math.floor((z - LAND.min) / landTexel);
+  return ix < 0 || iz < 0 || ix >= LN || iz >= LN ? -1 : iz * LN + ix;
+};
+// What grows at (x, z): grass growth, levelled, and whether grass grows there at all.
+function landAt(x, z) {
+  const i = landIndex(x, z);
+  return i < 0 ? { grow: 1, level: 0, fertile: false } : { grow: land.grow[i], level: land.level[i], fertile: !!land.fertile[i] };
+}
+// Calls fn(i) for every texel whose centre lies within r of (x, z), the edge made ragged by noise.
+function eachTexelNear(x, z, r, fn) {
+  const reach = r * 1.25;
+  for (let iz = Math.max(0, Math.floor((z - reach - LAND.min) / landTexel)); iz <= Math.min(LN - 1, Math.floor((z + reach - LAND.min) / landTexel)); iz++) {
+    for (let ix = Math.max(0, Math.floor((x - reach - LAND.min) / landTexel)); ix <= Math.min(LN - 1, Math.floor((x + reach - LAND.min) / landTexel)); ix++) {
+      const px = LAND.min + (ix + 0.5) * landTexel, pz = LAND.min + (iz + 0.5) * landTexel;
+      if (Math.hypot(px - x, pz - z) < r * (0.85 + 0.35 * vnoise(px * 2.3, pz * 2.3))) fn(iz * LN + ix);
+    }
+  }
+}
+// Cuts the grass to the ground within about r of (x, z), wetting the soil to `wet`; it starts growing back after
+// LAND.regrowDelay unless the ground is levelled.
+function clearLand(x, z, r, wet = 0.15) {
+  eachTexelNear(x, z, r, (i) => {
+    if (!land.fertile[i]) return;
+    land.grow[i] = 0;
+    land.rest[i] = LAND.regrowDelay * (0.8 + 0.4 * Math.random());
+    land.wet[i] = Math.max(land.wet[i], wet);
+  });
+  land.growing = land.drying = land.dirty = true;
+}
+// Levels the ground in a rectangle for building: bare, packed flat, and no grass grows back while it stays levelled.
+function levelLand(x0, z0, x1, z1, level = 1) {
+  for (let iz = Math.max(0, Math.floor((z0 - LAND.min) / landTexel)); iz <= Math.min(LN - 1, Math.floor((z1 - LAND.min) / landTexel)); iz++) {
+    for (let ix = Math.max(0, Math.floor((x0 - LAND.min) / landTexel)); ix <= Math.min(LN - 1, Math.floor((x1 - LAND.min) / landTexel)); ix++) {
+      const px = LAND.min + (ix + 0.5) * landTexel, pz = LAND.min + (iz + 0.5) * landTexel, i = iz * LN + ix;
+      if (px < x0 || px > x1 || pz < z0 || pz > z1 || !land.fertile[i]) continue;
+      land.level[i] = level;
+      if (level) { land.grow[i] = 0; land.wet[i] = Math.max(land.wet[i], 0.3); }
+      else land.rest[i] = LAND.regrowDelay;
+    }
+  }
+  land.growing = land.drying = land.dirty = true;
+}
+// Mean grass growth and levelling over a rectangle, counting only ground where grass grows.
+function landStats(x0, z0, x1, z1) {
+  let n = 0, grow = 0, level = 0;
+  for (let z = z0 + landTexel / 2; z < z1; z += landTexel) {
+    for (let x = x0 + landTexel / 2; x < x1; x += landTexel) {
+      const i = landIndex(x, z);
+      if (i < 0 || !land.fertile[i]) continue;
+      n++; grow += land.grow[i]; level += land.level[i];
+    }
+  }
+  return n ? { grow: grow / n, level: level / n } : { grow: 0, level: 0 };
+}
+// land.near = the grass growth around each texel: a box blur, one pass across and one down.
+function blurGrowth() {
+  const R = LAND.blur, w = 2 * R + 1, g = land.grow, f = land.fertile, tmp = land.tmp, out = land.near;
+  for (let z = 0; z < LN; z++) {
+    const row = z * LN;
+    let sum = 0;
+    for (let x = 0; x <= R; x++) sum += g[row + x] * f[row + x];
+    for (let x = 0; x < LN; x++) {
+      tmp[row + x] = sum / w;
+      const a = x + R + 1, b = x - R;
+      if (a < LN) sum += g[row + a] * f[row + a];
+      if (b >= 0) sum -= g[row + b] * f[row + b];
+    }
+  }
+  for (let x = 0; x < LN; x++) {
+    let sum = 0;
+    for (let z = 0; z <= R; z++) sum += tmp[z * LN + x];
+    for (let z = 0; z < LN; z++) {
+      out[z * LN + x] = sum / w;
+      const a = z + R + 1, b = z - R;
+      if (a < LN) sum += tmp[a * LN + x];
+      if (b >= 0) sum -= tmp[b * LN + x];
+    }
+  }
+}
+// Four times a second: cut grass regrows (fastest beside standing grass, so it creeps in from the edges) and dug soil
+// dries. Levelled ground stays bare.
+function stepLand(dt) {
+  if ((land.clock += dt) < 0.25) return;
+  const step = land.clock;
+  land.clock = 0;
+  if (land.growing) {
+    blurGrowth();
+    let busy = false;
+    for (let i = 0; i < LN * LN; i++) {
+      if (land.grow[i] >= 1 || land.level[i] > 0 || !land.fertile[i]) continue;
+      busy = true;
+      if (land.rest[i] > 0) { land.rest[i] -= step; continue; }
+      land.grow[i] = Math.min(1, land.grow[i] + step * (LAND.base + (1 - LAND.base) * land.near[i]) / LAND.regrowTime);
+    }
+    land.growing = busy;
+    land.dirty = true;
+  }
+  if (land.drying) {
+    const k = Math.exp(-step / LAND.dryTime);
+    let busy = false;
+    for (let i = 0; i < LN * LN; i++) {
+      const floor = land.level[i] > 0 ? 0.08 : 0;   // levelled ground keeps a little colour of turned earth
+      if (land.wet[i] > floor + 0.004) { land.wet[i] = floor + (land.wet[i] - floor) * k; busy = true; }
+    }
+    land.drying = busy;
+    land.dirty = true;
+  }
+  if (land.dirty) uploadLand();
 }
 
 const GRASS_ALBEDO = /* glsl */ `
@@ -284,8 +547,8 @@ const groundMat = new THREE.ShaderMaterial({
       gl_Position = projectionMatrix * mv;
     }`,
   fragmentShader: /* glsl */ `
-    ${COMMON} ${SHADE} ${GRASS_ALBEDO}
-    uniform vec3 uDirt, uDirtDark;
+    ${COMMON} ${SHADE} ${GRASS_ALBEDO} ${LAND_GLSL}
+    uniform vec3 uDirt, uDirtDark, uSand, uSandWet, uBed, uSoil, uSoilWet, uSoilPacked;
     uniform float uPathHalf;
     uniform vec2 uPath[${PATH.length}];
     varying vec3 vWorld; varying float vDepth;
@@ -304,6 +567,17 @@ const groundMat = new THREE.ShaderMaterial({
       vec3 dirt = mix(uDirtDark, uDirt, smoothstep(0.3, 0.7, fbm(xz * 0.7)));
       float edge = pathDist(xz) + (fbm(xz * 1.7) - 0.5) * 0.5;
       vec3 albedo = mix(dirt, grass, smoothstep(uPathHalf - 0.15, uPathHalf + 0.25, edge));
+      // A ragged sandy beach around the lake, wet near the water, then the lake bed.
+      float ld = lakeDistance(xz) + (fbm(xz * 1.3) - 0.5) * 0.6;
+      vec3 sand = mix(uSandWet, uSand, smoothstep(0.2, 1.3, ld));
+      albedo = mix(albedo, sand, 1.0 - smoothstep(1.3, 2.1, ld));
+      if (ld < 0.6) albedo = mix(sand, uBed, smoothstep(0.6, -2.5, ld));
+      // Cleared ground: bare lumpy earth where the grass is gone, dark while freshly dug, smooth and pale where levelled.
+      vec4 land = landAt(xz);
+      float bare = 1.0 - smoothstep(0.1, 0.6, land.r + (fbm(xz * 3.3) - 0.5) * 0.3);
+      vec3 soil = mix(uSoil, uSoilWet, land.b) * (0.8 + 0.4 * fbm(xz * 7.0 + 11.0));
+      soil = mix(soil, uSoilPacked * (0.95 + 0.1 * noise(xz * 9.0)), smoothstep(0.3, 0.9, land.g));
+      albedo = mix(albedo, soil, bare);
       gl_FragColor = vec4(light(albedo, xz, 0.95, vDepth, 1.0), 1.0);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
@@ -311,8 +585,18 @@ const groundMat = new THREE.ShaderMaterial({
 });
 groundMat.uniforms.uPath = { value: PATH };
 groundMat.uniforms.uPathHalf = { value: PATH_HALF };
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(260, 260).rotateX(-Math.PI / 2), groundMat);
-scene.add(ground);
+{
+  // A detailed patch around the field that dips into the lake basin, ringed by flat ground out to the horizon.
+  const inner = new THREE.PlaneGeometry(64, 64, 128, 128).rotateX(-Math.PI / 2);
+  const p = inner.getAttribute("position");
+  for (let i = 0; i < p.count; i++) p.setY(i, groundHeight(p.getX(i), p.getZ(i)));
+  scene.add(new THREE.Mesh(inner, groundMat));
+  for (const [x, z, w, d] of [[0, -81, 260, 98], [0, 81, 260, 98], [-81, 0, 98, 64], [81, 0, 98, 64]]) {
+    const ring = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), groundMat);
+    ring.position.set(x, 0, z);
+    scene.add(ring);
+  }
+}
 
 // ---------- grass blades
 
@@ -338,7 +622,7 @@ const bladeMat = new THREE.ShaderMaterial({
   uniforms,
   side: THREE.DoubleSide,
   vertexShader: /* glsl */ `
-    ${COMMON} ${WIND_VERTEX}
+    ${COMMON} ${WIND_VERTEX} ${LAND_GLSL}
     attribute vec3 offset;
     attribute vec4 params; // rotation, height, width, random
     uniform vec3 uSunDir;
@@ -346,6 +630,11 @@ const bladeMat = new THREE.ShaderMaterial({
     varying vec3 vWorld;
     void main() {
       float t = position.y, rot = params.x, h = params.y, w = params.z;
+      // On cleared ground a blade shows once the grass growing back passes its own threshold, so regrowth comes in
+      // as scattered sprouts that thicken and lengthen.
+      float th = params.w * 0.85, show = smoothstep(th, th + 0.18, landAt(offset.xz).r);
+      h *= show;
+      w *= step(0.02, show);
       vec3 local = vec3(position.x * w, t * h, 0.0);
       float c = cos(rot), s = sin(rot);
       local = vec3(c * local.x, local.y, -s * local.x);
@@ -396,6 +685,7 @@ function plantGrass(level) {
       const px = x + rand() * step, pz = z + rand() * step;
       const edge = pathDistance(px, pz) + (vnoise(px * 1.7, pz * 1.7) - 0.5) * 0.5;
       if (edge < PATH_HALF + (rand() - 0.5) * 0.3) continue;
+      if (lakeDistance(px, pz) < 1.6 + (rand() - 0.5) * 0.6) continue;
       const clump = vnoise(px * 0.35, pz * 0.35);
       offsets.push(px, 0, pz);
       params.push(rand() * Math.PI * 2, 0.24 + 0.2 * clump + rand() * 0.1, 0.1 + rand() * 0.05, rand());
@@ -409,6 +699,7 @@ function plantGrass(level) {
   g.instanceCount = offsets.length / 3;
   blades = new THREE.Mesh(g, bladeMat);
   blades.frustumCulled = false;
+  blades.layers.set(1);
   scene.add(blades);
   document.querySelectorAll("[data-density]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.density === level)));
   $("stats").textContent = `${g.instanceCount.toLocaleString("en-US")} blades on ${FIELD} \u00d7 ${FIELD} cells \u00b7 trees \u00b7 3 walkers`;
@@ -453,11 +744,11 @@ const flowerMat = new THREE.ShaderMaterial({
   uniforms,
   side: THREE.DoubleSide,
   vertexShader: /* glsl */ `
-    ${COMMON} ${WIND_VERTEX}
+    ${COMMON} ${WIND_VERTEX} ${LAND_GLSL}
     attribute vec3 offset; attribute vec4 params; attribute vec3 color; attribute float t;
     varying vec3 vColor, vWorld; varying float vDepth;
     void main() {
-      float rot = params.x, h = params.y;
+      float rot = params.x, h = params.y * smoothstep(0.78, 0.95, landAt(offset.xz).r);   // flowers come back last
       float c = cos(rot), s = sin(rot);
       vec3 local = vec3(c * position.x + s * position.z, position.y, -s * position.x + c * position.z) * h;
       float g, pressed;
@@ -480,7 +771,7 @@ const flowerMat = new THREE.ShaderMaterial({
   const rand = mulberry32(9), offsets = [], params = [];
   for (let i = 0; i < 700 && offsets.length < 3 * 260; i++) {
     const x = (rand() - 0.5) * FIELD * 0.95, z = (rand() - 0.5) * FIELD * 0.95;
-    if (pathDistance(x, z) < PATH_HALF + 0.8) continue;
+    if (pathDistance(x, z) < PATH_HALF + 0.8 || lakeDistance(x, z) < 2.3) continue;
     offsets.push(x, 0, z);
     params.push(rand() * Math.PI * 2, 0.62 + rand() * 0.22, 0, rand());
   }
@@ -496,12 +787,11 @@ const flowerMat = new THREE.ShaderMaterial({
 
 // ---------- trees: tall branching trunks under soft canopies of camera-facing leaf cards
 
-// A sprig of pointed leaves drawn once into a texture; alpha cuts the card out, red adds leaf-to-leaf shading.
-function leafTexture() {
-  const c = document.createElement("canvas");
-  c.width = c.height = 128;
-  const g = c.getContext("2d");
-  const rand = mulberry32(21);
+// Every leaf card samples one 4×2 atlas, one cell per kind of sprig. Alpha cuts the card out; red is leaf-to-leaf
+// shading. Each sprig is drawn into a 128-unit cell and scaled up 2×.
+const LEAF = { pointed: 0, oak: 1, birch: 2, fern: 3, needles: 4 };
+// A sprig of pointed leaves (the backdrop broadleaves and pines).
+function drawPointed(g, rand) {
   for (let i = 0; i < 9; i++) {
     const a = (i / 9) * Math.PI * 2 + rand() * 0.5, len = 34 + rand() * 18, w = 11 + rand() * 6, r0 = 6 + rand() * 18;
     g.save();
@@ -519,8 +809,88 @@ function leafTexture() {
     g.stroke();
     g.restore();
   }
+}
+// Leaves drawn along a midrib from the stem (0) to the tip (1): `width(t)` is the half-width at t.
+function drawLeaf(g, x, y, angle, len, width, shade, edge) {
+  g.save();
+  g.translate(x, y);
+  g.rotate(angle);
+  g.beginPath();
+  for (let i = 0; i <= 24; i++) g.lineTo(-width(i / 24), -len * i / 24);
+  for (let i = 24; i >= 0; i--) g.lineTo(width(i / 24), -len * i / 24);
+  g.closePath();
+  g.fillStyle = `rgb(${shade},${shade},${shade})`;
+  g.fill();
+  g.strokeStyle = `rgba(80,80,80,${edge})`;
+  g.lineWidth = 1.4;
+  g.stroke();
+  g.restore();
+}
+// Oak: big leaves with 3–4 rounded lobes a side and deep notches between them, fanned out so the outline of each
+// leaf reads at the edge of a canopy (the reel's autumn oaks).
+function drawOak(g, rand) {
+  for (let i = 0; i < 7; i++) {
+    const a = -Math.PI / 2 + (i - 3) * 0.62 + (rand() - 0.5) * 0.3, r0 = 8 + rand() * 10, len = 40 + rand() * 14, w = 10 + rand() * 4;
+    const lobes = 3 + (rand() < 0.5 ? 1 : 0);
+    const width = (t) => w * Math.pow(Math.sin(Math.PI * Math.min(1, t * 1.08)), 0.7) * (0.42 + 0.58 * Math.abs(Math.sin(t * Math.PI * (lobes + 0.5))));
+    drawLeaf(g, 64 + Math.cos(a) * r0, 76 + Math.sin(a) * r0, a + Math.PI / 2, len, width, Math.round(165 + rand() * 90), 0.9);
+  }
+}
+// Birch: a spray of small pointed ovals with toothed edges.
+function drawBirch(g, rand) {
+  for (let i = 0; i < 13; i++) {
+    const a = rand() * Math.PI * 2, r0 = 6 + rand() * 26, len = 17 + rand() * 7, w = 6 + rand() * 2;
+    const width = (t) => w * Math.pow(Math.sin(Math.PI * Math.pow(t, 0.75)), 0.9) * (1 + 0.08 * ((t * 24) % 2 < 1 ? 1 : -1));
+    drawLeaf(g, 64 + Math.cos(a) * r0, 64 + Math.sin(a) * r0, a + Math.PI / 2 + (rand() - 0.5), len, width, Math.round(170 + rand() * 85), 0.8);
+  }
+}
+// Feathery bipinnate fronds fanning up from the bottom of the cell (the silk trees).
+function drawFern(g, rand) {
+  for (let f = 0; f < 5; f++) {
+    const a = -Math.PI / 2 + (f - 2) * 0.5 + (rand() - 0.5) * 0.2, len = 78 + rand() * 30, dx = Math.cos(a), dy = Math.sin(a);
+    g.strokeStyle = "rgb(110,110,110)";
+    g.lineWidth = 1.6;
+    g.beginPath(); g.moveTo(64, 120); g.lineTo(64 + dx * len, 120 + dy * len); g.stroke();
+    for (let k = 4; k < len; k += 4.5) {
+      const px = 64 + dx * k, py = 120 + dy * k, side = 9 * (1 - k / len) + 2.5;
+      for (const sgn of [-1, 1]) {
+        const shade = Math.round(170 + rand() * 85);
+        g.fillStyle = `rgb(${shade},${shade},${shade})`;
+        g.save();
+        g.translate(px - dy * sgn * side * 0.6, py + dx * sgn * side * 0.6);
+        g.rotate(a + sgn * 1.25);
+        g.beginPath(); g.ellipse(0, 0, side * 0.6, 2.1, 0, 0, Math.PI * 2); g.fill();
+        g.restore();
+      }
+    }
+  }
+}
+// Fir: a dense, fuzzy tuft of needles pointing outward from the middle, darker deep inside, so its edge bristles and
+// it reads as conifer at any spin of the card.
+function drawNeedles(g, rand) {
+  g.lineCap = "round";
+  for (let i = 0; i < 420; i++) {
+    const r = 50 * Math.pow(rand(), 0.7), a = rand() * Math.PI * 2, na = a + (rand() - 0.5) * 0.9, nl = 6 + rand() * 6;
+    const x = 64 + Math.cos(a) * r, y = 64 + Math.sin(a) * r, shade = Math.round(120 + 135 * (r / 50) * (0.6 + 0.4 * rand()));
+    g.strokeStyle = `rgb(${shade},${shade},${shade})`;
+    g.lineWidth = 1.6;
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(na) * nl, y + Math.sin(na) * nl); g.stroke();
+  }
+}
+function leafAtlas() {
+  const c = document.createElement("canvas");
+  c.width = 1024; c.height = 512;
+  const g = c.getContext("2d");
+  [[drawPointed, 21], [drawOak, 33], [drawBirch, 45], [drawFern, 31], [drawNeedles, 52]].forEach(([draw, seed], k) => {
+    g.save();
+    g.translate((k % 4) * 256, Math.floor(k / 4) * 256);
+    g.scale(2, 2);
+    draw(g, mulberry32(seed));
+    g.restore();
+  });
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.NoColorSpace;
+  t.anisotropy = 4;
   return t;
 }
 
@@ -532,21 +902,25 @@ const foliageMat = new THREE.ShaderMaterial({
     ${COMMON}
     attribute vec3 cardPos, clusterCenter, leafColor;
     attribute vec4 cardInfo; // size, spin, random, stiffness (pines sway less)
-    attribute float clusterRadius;
+    attribute float clusterRadius, leafKind; // leafKind: atlas cell (LEAF), or -1 for a card with its own texture
     varying vec2 vUv; varying vec3 vNormalW, vWorld, vLeaf; varying float vShell, vRnd, vDepth;
     void main() {
-      vec3 wp = cardPos;
+      // World position of the card and its clump. The shared canopy mesh sits at the origin; a silk tree's own mesh
+      // moves, shakes, falls and grows with its tree.
+      vec3 wp = (modelMatrix * vec4(cardPos, 1.0)).xyz, cc = (modelMatrix * vec4(clusterCenter, 1.0)).xyz, rest = wp;
+      float ms = length(modelMatrix[0].xyz);
       float give = 1.0 - cardInfo.w;
-      float sway = sin(uTime * (1.1 + 1.6 * uWind) + clusterCenter.x * 0.4 + clusterCenter.z * 0.3) * 0.5 + 0.5;
+      float sway = sin(uTime * (1.1 + 1.6 * uWind) + cc.x * 0.4 + cc.z * 0.3) * 0.5 + 0.5;
       float flutter = sin(uTime * (3.5 + 5.0 * uWind) + cardInfo.z * 40.0);
-      wp.xz += uWindDir * (0.02 + 0.3 * uWind) * (0.4 + 0.6 * gust(clusterCenter.xz)) * sway * clamp(wp.y * 0.2, 0.0, 1.2) * give;
+      wp.xz += uWindDir * (0.02 + 0.3 * uWind) * (0.4 + 0.6 * gust(cc.xz)) * sway * clamp(wp.y * 0.2, 0.0, 1.2) * give;
       wp += vec3(flutter * 0.4, flutter * 0.25, -flutter * 0.3) * (0.015 + 0.06 * uWind) * give;
       vec4 mv = viewMatrix * vec4(wp, 1.0);
       float c = cos(cardInfo.y), s = sin(cardInfo.y);
-      mv.xy += vec2(c * position.x - s * position.y, s * position.x + c * position.y) * cardInfo.x;
-      vUv = position.xy + 0.5;
+      mv.xy += vec2(c * position.x - s * position.y, s * position.x + c * position.y) * cardInfo.x * ms;
+      vUv = leafKind < 0.0 ? position.xy + 0.5
+        : (position.xy + 0.5) * vec2(0.25, 0.5) + vec2(mod(leafKind, 4.0) * 0.25, (1.0 - floor(leafKind / 4.0)) * 0.5);
       // Normals point out of the clump (lifted a little), so each clump shades like one soft ball.
-      vNormalW = normalize(cardPos - clusterCenter + vec3(0.0, 0.35 * clusterRadius, 0.0));
+      vNormalW = normalize(rest - cc + vec3(0.0, 0.35 * clusterRadius * ms, 0.0));
       vShell = clamp(length(cardPos - clusterCenter) / clusterRadius, 0.0, 1.0);
       vRnd = cardInfo.z; vLeaf = leafColor; vWorld = wp; vDepth = -mv.z;
       gl_Position = projectionMatrix * mv;
@@ -569,140 +943,484 @@ const foliageMat = new THREE.ShaderMaterial({
       }
       float wrap = clamp(dot(vNormalW, uSunDir) * 0.55 + 0.45, 0.0, 1.0);
       vec3 base = vLeaf * 0.62;
-      vec3 dark = base * vec3(0.36, 0.42, 0.42), tip = mix(base, vec3(1.0, 0.95, 0.75), 0.22);
+      vec3 dark = base * vec3(0.36, 0.42, 0.42), tip = mix(base, vec3(1.0, 0.95, 0.75), 0.14);
       vec3 col = mix(dark, base, smoothstep(0.15, 0.85, wrap));
       col = mix(col, tip, smoothstep(0.8, 1.0, wrap) * 0.6);
       col *= mix(0.55, 1.0, smoothstep(0.35, 1.0, vShell));   // deeper leaves sit in shade
       col *= mix(0.78, 1.0, tex.r) * (0.9 + 0.2 * vRnd);
+      // Looking toward the sun, it shines through the outer leaves, so backlit canopies glow at the edges.
+      float back = pow(max(dot(normalize(vWorld - cameraPosition), uSunDir), 0.0), 3.0) * smoothstep(0.45, 1.0, vShell);
+      col = mix(col, vLeaf * vec3(1.1, 0.88, 0.62), back * 0.55);
       col = max(mix(vec3(dot(col, vec3(0.299, 0.587, 0.114))), col, 1.3), 0.0);   // AgX mutes bright foliage; push saturation back
       // Alpha-to-coverage turns this into soft, anti-aliased leaf edges.
-      gl_FragColor = vec4(light(col, vWorld.xz, mix(0.22, 0.85, wrap), vDepth, 0.0), smoothstep(0.3, 0.55, tex.a));
+      gl_FragColor = vec4(light(col, vWorld.xz, mix(0.22, 0.85, wrap) + back * 0.7, vDepth, 0.0), smoothstep(0.3, 0.55, tex.a));
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
     }`,
 });
-uniforms.uLeaf = { value: leafTexture() };
+uniforms.uLeaf = { value: leafAtlas() };
 uniforms.uHero = { value: new THREE.Vector3() };
 uniforms.uSeeThrough = { value: 1 };
 
 const OBSTACLES = []; // {x, z, r}: walkers steer around these
-const LEAVES = { green: "#5aa83e", deep: "#3c8a3f", orange: "#f07f22", red: "#d63c2a", gold: "#f0b92e", pine: "#2f6f47", blossom: "#ff8fbf" };
-const bark = new THREE.MeshLambertMaterial({ color: "#6e4a32" }), barkDark = new THREE.MeshLambertMaterial({ color: "#4f3423" });
+const FIXED = [];     // the obstacles nothing can clear (the meadow's two pines), which no plot can cover
+const bushes = [];    // the bushes, each its own mesh so the sickle can clear it (see cutHit)
+let treeShadowsUsed = 0; // shadow slots growFoliage fills; the choppable trees take the ones after
+const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
 
-function limb(group, a, b, r0, r1) {
-  const dir = new THREE.Vector3().subVectors(b, a), len = dir.length();
-  const m = new THREE.Mesh(new THREE.CylinderGeometry(r1, r0, len, 7), bark);
-  m.position.copy(a).addScaledVector(dir, 0.5);
-  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
-  group.add(m);
+// Leaf palettes, shadow → mid → lit → rim. A card takes its colour from where it sits in its clump: the underside
+// and the inside run toward the first, the sunny top and the outside toward the last.
+const PALETTES = Object.fromEntries(Object.entries({
+  ember: ["#4a0e0b", "#9a2616", "#d9461f", "#f2843a"],     // the reel's autumn oaks: maroon inside, orange rim
+  amber: ["#5e200c", "#b8461a", "#e8702a", "#f8ae4a"],
+  maroon: ["#3e0d0c", "#7a1f1a", "#a8321b", "#d0552a"],
+  teal: ["#164f52", "#2f9690", "#74d4c6", "#c4f7ea"],      // the reel's birches
+  gold: ["#6a4a12", "#b9871f", "#e8c046", "#fbe58c"],
+  green: ["#2d5e2a", "#4f9a3c", "#7cc04f", "#b4df7a"],
+  silk: ["#4f8a34", "#79b64c", "#a3d36c", "#c9e796"],
+  pine: ["#0f3a2c", "#24704a", "#45a052", "#a6d46a"],
+  blossom: ["#b0507c", "#ff8fbf", "#ffb3d6", "#ffe0ee"],
+}).map(([k, hexes]) => [k, hexes.map((h) => new THREE.Color(h))]));
+const _pc = new THREE.Color();
+function paletteAt(pal, f) {
+  const x = Math.min(0.999, Math.max(0, f)) * (pal.length - 1), i = Math.floor(x);
+  return _pc.copy(pal[i]).lerp(pal[i + 1], x - i);
+}
+// The meadow has three groves, as the game will have zones: autumn oaks on the -x side, a birch wood toward -z,
+// and silk trees round the lake.
+const zoneAt = (x, z) => (x < -5 ? "autumn" : z < -5 ? "birch" : "silk");
+
+// Leaf cards are gathered into these arrays, then drawn as one instanced mesh.
+const newCards = () => ({ pos: [], centers: [], radii: [], colors: [], info: [], kinds: [] });
+// One clump: cards in a shell round the centre, flattened by `squash`, the underside tucked up.
+// o: { pal, kind (LEAF), size (card, m), density (cards per m² of r²), stiff (0 sways freely), onCard(x, y, z) }
+function addClump(c, rand, cx, cy, cz, r, squash, o) {
+  const n = Math.round(o.density * r * r * squash), shift = (rand() - 0.5) * 0.3;
+  for (let i = 0; i < n; i++) {
+    const u = rand() * 2 - 1, a = rand() * Math.PI * 2, k = Math.sqrt(1 - u * u), rr = r * (0.55 + 0.45 * Math.sqrt(rand()));
+    let y = u * rr * squash;
+    if (y < 0) y *= 0.55;
+    const x = cx + Math.cos(a) * k * rr, z = cz + Math.sin(a) * k * rr;
+    c.pos.push(x, cy + y, z);
+    c.centers.push(cx, cy, cz);
+    c.radii.push(r);
+    const col = paletteAt(o.pal, 0.5 + 0.32 * u + 0.4 * (rr / r - 0.78) + shift + (rand() - 0.5) * 0.3);
+    c.colors.push(col.r, col.g, col.b);
+    c.info.push(o.size * (0.75 + rand() * 0.5), rand() * Math.PI * 2, rand(), o.stiff ?? 0);
+    c.kinds.push(o.kind);
+    if (o.onCard) o.onCard(x, cy + y, z);
+  }
+}
+// One tier of a conifer: a drooping skirt of cards round (x, z), its top at y by the trunk and its rim `h` lower at
+// radius R. Rim cards are the bright ones; those tucked in by the trunk and under the skirt sit in shade.
+// o: as for addClump.
+function addSkirt(c, rand, x, y, z, R, h, o) {
+  const n = Math.round(o.density * R * R), shift = (rand() - 0.5) * 0.2;
+  for (let i = 0; i < n; i++) {
+    const rho = R * (0.2 + 0.8 * Math.sqrt(rand())), a = rand() * Math.PI * 2, out = rho / R, under = rand() * rand();
+    const cy = y - h * Math.pow(out, 1.3) - under * 0.45 * h * out + (rand() - 0.5) * 0.12 * h;
+    c.pos.push(x + Math.cos(a) * rho, cy, z + Math.sin(a) * rho);
+    c.centers.push(x, y - h, z);
+    c.radii.push(R);
+    const col = paletteAt(o.pal, 0.08 + 0.9 * out * out - 0.6 * under + shift + (rand() - 0.5) * 0.2);
+    c.colors.push(col.r, col.g, col.b);
+    c.info.push(o.size * (0.75 + rand() * 0.5), rand() * Math.PI * 2, rand(), o.stiff ?? 0);
+    c.kinds.push(o.kind);
+  }
+}
+function cardMesh(c, material) {
+  const quad = new THREE.PlaneGeometry(1, 1), g = new THREE.InstancedBufferGeometry();
+  g.index = quad.index;
+  g.setAttribute("position", quad.getAttribute("position"));
+  g.setAttribute("cardPos", new THREE.InstancedBufferAttribute(new Float32Array(c.pos), 3));
+  g.setAttribute("clusterCenter", new THREE.InstancedBufferAttribute(new Float32Array(c.centers), 3));
+  g.setAttribute("clusterRadius", new THREE.InstancedBufferAttribute(new Float32Array(c.radii), 1));
+  g.setAttribute("leafColor", new THREE.InstancedBufferAttribute(new Float32Array(c.colors), 3));
+  g.setAttribute("cardInfo", new THREE.InstancedBufferAttribute(new Float32Array(c.info), 4));
+  g.setAttribute("leafKind", new THREE.InstancedBufferAttribute(new Float32Array(c.kinds), 1));
+  g.instanceCount = c.radii.length;
+  const m = new THREE.Mesh(g, material);
+  m.frustumCulled = false;
+  return m;
 }
 
-function growFoliage() {
-  const rand = mulberry32(42), cardPos = [], centers = [], radii = [], info = [], colors = [], shadows = [];
-  const pick = (weights) => { let r = rand() * weights.reduce((a, [, w]) => a + w, 0); for (const [k, w] of weights) if ((r -= w) <= 0) return k; return weights[0][0]; };
-  const clump = (cx, cy, cz, r, cardSize, hex, stiff, squash = 1) => {
-    const col = new THREE.Color(hex), n = Math.round(130 * r * r * squash);
-    for (let i = 0; i < n; i++) {
-      const u = rand() * 2 - 1, a = rand() * Math.PI * 2, k = Math.sqrt(1 - u * u), rr = r * (0.55 + 0.45 * Math.sqrt(rand()));
-      let y = u * rr * squash;
-      if (y < 0) y *= 0.6;
-      cardPos.push(cx + Math.cos(a) * k * rr, cy + y, cz + Math.sin(a) * k * rr);
-      centers.push(cx, cy, cz);
-      radii.push(r);
-      const v = 0.9 + rand() * 0.2;
-      colors.push(col.r * v, col.g * v, col.b * v);
-      info.push(cardSize * (0.75 + rand() * 0.5), rand() * Math.PI * 2, rand(), stiff);
-    }
+// Bark: grey detail tinted by each material's colour (birch has its own white bark). u runs round a limb and v up it
+// in metres, so the pattern keeps its scale on every limb. Everything is drawn wrapped both ways, so it tiles without
+// seams round the trunk or up it.
+function barkTexture(birch) {
+  const c = document.createElement("canvas");
+  c.width = 128; c.height = 256;
+  const g = c.getContext("2d"), rand = mulberry32(birch ? 77 : 66);
+  const wrapped = (draw) => {
+    for (const dx of [-128, 0, 128]) for (const dy of [-256, 0, 256]) { g.save(); g.translate(dx, dy); draw(); g.restore(); }
   };
+  if (birch) {
+    // White paper bark: faint grey streaks, black dashes running round the trunk, and a few dark chevron knots.
+    g.fillStyle = "#f4f1ea"; g.fillRect(0, 0, 128, 256);
+    for (let i = 0; i < 50; i++) {
+      const x = rand() * 128, y = rand() * 256, w = 8 + rand() * 30, h = 1 + rand() * 2, a = 0.12 + rand() * 0.2;
+      wrapped(() => { g.fillStyle = `rgba(150,146,138,${a})`; g.fillRect(x, y, w, h); });
+    }
+    for (let i = 0; i < 30; i++) {
+      const x = rand() * 128, y = rand() * 256, w = 6 + rand() * 30, h = 1.5 + rand() * 3, a = 0.55 + rand() * 0.45;
+      wrapped(() => { g.fillStyle = `rgba(28,26,24,${a})`; g.beginPath(); g.ellipse(x, y, w / 2, h / 2, 0, 0, Math.PI * 2); g.fill(); });
+    }
+    for (let i = 0; i < 4; i++) {
+      const x = rand() * 128, y = rand() * 256;
+      wrapped(() => {
+        g.fillStyle = "rgba(25,22,20,0.9)";
+        g.beginPath(); g.moveTo(x - 14, y - 6); g.quadraticCurveTo(x, y + 6, x + 14, y - 6); g.lineTo(x + 10, y - 2);
+        g.quadraticCurveTo(x, y + 12, x - 10, y - 2); g.fill();
+      });
+    }
+  } else {
+    // Furrowed bark: long ridges with dark grooves between them that wander gently (in whole waves over the tile, so
+    // they meet themselves top to bottom), crossed by a few short cracks.
+    g.fillStyle = "#dedad6"; g.fillRect(0, 0, 128, 256);
+    for (let i = 0; i < 26; i++) {
+      const x0 = rand() * 128, a1 = 2 + rand() * 4, a2 = 0.8 + rand() * 1.6, k1 = 1 + ((rand() * 2) | 0), k2 = 3 + ((rand() * 3) | 0);
+      const p1 = rand() * 6.283, p2 = rand() * 6.283, pts = [];
+      for (let y = 0; y <= 256; y += 8) pts.push([x0 + a1 * Math.sin(6.283 * k1 * y / 256 + p1) + a2 * Math.sin(6.283 * k2 * y / 256 + p2), y]);
+      const dark = i % 3 !== 2, w = dark ? 1.6 + rand() * 2.6 : 2 + rand() * 3, a = dark ? 0.24 + rand() * 0.22 : 0.22 + rand() * 0.2;
+      wrapped(() => {
+        g.strokeStyle = dark ? `rgba(70,58,50,${a})` : `rgba(255,252,246,${a})`;
+        g.lineWidth = w;
+        g.lineCap = "round";
+        g.beginPath(); pts.forEach(([px, py]) => g.lineTo(px, py)); g.stroke();
+      });
+    }
+    for (let i = 0; i < 18; i++) {
+      const x = rand() * 128, y = rand() * 256, w = 4 + rand() * 7, a = 0.25 + rand() * 0.25;
+      wrapped(() => { g.strokeStyle = `rgba(70,58,50,${a})`; g.lineWidth = 1.2; g.beginPath(); g.moveTo(x, y); g.lineTo(x + w, y + (rand() - 0.5) * 2); g.stroke(); });
+    }
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(birch ? 1 : 2, 1 / 1.6);
+  t.anisotropy = 4;
+  return t;
+}
+const barkMap = barkTexture(false);
+const BARK = {
+  oak: new THREE.MeshLambertMaterial({ map: barkMap, color: "#b36b45" }),
+  dark: new THREE.MeshLambertMaterial({ map: barkMap, color: "#8c6149" }),
+  silk: new THREE.MeshLambertMaterial({ map: barkMap, color: "#a8927f" }),
+  pine: new THREE.MeshLambertMaterial({ map: barkMap, color: "#7d5238" }),
+  birch: new THREE.MeshLambertMaterial({ map: barkTexture(true) }),
+};
+// Bark darkens toward the ground, where the grass and the roots shade it.
+for (const m of Object.values(BARK)) {
+  m.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying float vBarkY;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvBarkY = (modelMatrix * vec4(transformed, 1.0)).y;");
+    sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nvarying float vBarkY;")
+      .replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.rgb *= mix(0.55, 1.0, smoothstep(-0.05, 0.8, vBarkY));");
+  };
+}
+
+// Bark surfaces are rings of points round a centre line: rings[i] holds radial + 1 points, the last repeating the
+// first, running anticlockwise seen from the end the line heads toward (so the faces point out); vs[i] is each ring's
+// v and us[i] (optional) the u of its first point. Normals come from the neighbouring points, wrapping round each
+// ring, so lobed outlines shade smoothly.
+function ringGeometry(rings, vs, us) {
+  const n = rings.length, m = rings[0].length, radial = m - 1, pos = [], nor = [], uv = [], index = [];
+  const da = new THREE.Vector3(), dt = new THREE.Vector3(), nv = new THREE.Vector3();
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < m; j++) {
+      da.subVectors(rings[i][j === radial ? 1 : j + 1], rings[i][j === 0 ? radial - 1 : j - 1]);
+      dt.subVectors(rings[Math.min(n - 1, i + 1)][j], rings[Math.max(0, i - 1)][j]);
+      nv.crossVectors(da, dt).normalize();
+      const p = rings[i][j];
+      pos.push(p.x, p.y, p.z);
+      nor.push(nv.x, nv.y, nv.z);
+      uv.push(j / radial + (us ? us[i] : 0), vs[i]);
+      if (i < n - 1 && j < radial) { const a0 = i * m + j, b0 = a0 + m; index.push(a0, a0 + 1, b0, b0, a0 + 1, b0 + 1); }
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(index);
+  return g;
+}
+// A flat cap of end grain over a ring (one from ringGeometry's layout), facing up or down.
+function capGeometry(ring, up) {
+  const c = new THREE.Vector3(), radial = ring.length - 1;
+  for (let j = 0; j < radial; j++) c.add(ring[j]);
+  c.divideScalar(radial);
+  const reach = Math.max(...ring.map((p) => Math.hypot(p.x - c.x, p.z - c.z))), pos = [c.x, c.y, c.z], uv = [0.5, 0.5], index = [];
+  for (let j = 0; j <= radial; j++) {
+    pos.push(ring[j].x, ring[j].y, ring[j].z);
+    uv.push(0.5 + 0.47 * (ring[j].x - c.x) / reach, 0.5 + 0.47 * (ring[j].z - c.z) / reach);
+    if (j < radial) index.push(...(up ? [0, j + 1, j + 2] : [0, j + 2, j + 1]));
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("normal", new THREE.Float32BufferAttribute(new Array(pos.length / 3).fill([0, up ? 1 : -1, 0]).flat(), 3));
+  g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(index);
+  return g;
+}
+// A ring round a vertical axis at height y: radius(phi) for each compass angle phi = atan2(z, x).
+function flatRing(y, radial, radius) {
+  const ring = [];
+  for (let j = 0; j <= radial; j++) {
+    const a = ((j % radial) / radial) * Math.PI * 2, phi = Math.atan2(-Math.sin(a), Math.cos(a)), r = radius(phi);
+    ring.push(V3(Math.cos(phi) * r, y, Math.sin(phi) * r));
+  }
+  return ring;
+}
+// A trunk's outline as a factor on its radius: `n` ridges that swell into buttress roots near the ground, plus fine
+// flutes. o: { n, buttress (extra at the ground), rise (m it fades over), ridge (all the way up), flutes, flute }.
+function trunkLobes(o, phase) {
+  return (phi, y) => {
+    const ridge = Math.pow(0.5 + 0.5 * Math.cos(o.n * phi + phase), 3);   // narrow ridges between rounder hollows
+    return 1 + (o.buttress * Math.exp(-Math.max(0, y) / o.rise) + o.ridge) * (ridge - 0.2) + o.flute * Math.cos(o.flutes * phi + phase * 2.3);
+  };
+}
+// A limb along a smooth curve through `points`, tapering from r0 to r1, open at both ends (they hide in the trunk or
+// a leaf clump). o.radius(d, len) replaces the straight taper (d = metres along); o.collar swells the base where it
+// grows out of its parent; o.lobe(phi, y) shapes a trunk's outline, with o.y0 added to y. A trunk's bark is laid by
+// compass angle and height, as the stump's is, so the two line up at the cut. o.capEnd closes the far end (a trunk
+// that splits into limbs there).
+function limbGeometry(points, r0, r1, radial = 8, o = {}) {
+  const curve = new THREE.CatmullRomCurve3(points), len = curve.getLength();
+  const segs = Math.max(2, Math.ceil(len / (o.lobe ? 0.12 : 0.25))), frames = curve.computeFrenetFrames(segs, false);
+  const rings = [], vs = [], us = [];
+  for (let i = 0; i <= segs; i++) {
+    const t = i / segs, d = t * len, p = curve.getPointAt(t), N = frames.normals[i], B = frames.binormals[i];
+    us.push(o.lobe ? -Math.atan2(N.z, N.x) / (Math.PI * 2) : 0);
+    let r = o.radius ? o.radius(d, len) : r0 + (r1 - r0) * t;
+    if (o.collar) r *= 1 + o.collar * Math.exp(-d / (2.5 * r0));
+    const ring = [];
+    for (let j = 0; j <= radial; j++) {
+      const a = ((j % radial) / radial) * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
+      const dir = V3(ca * N.x + sa * B.x, ca * N.y + sa * B.y, ca * N.z + sa * B.z);
+      ring.push(p.clone().addScaledVector(dir, r * (o.lobe ? o.lobe(Math.atan2(dir.z, dir.x), p.y + (o.y0 || 0)) : 1)));
+    }
+    rings.push(ring);
+    vs.push(d + (o.y0 || 0));
+  }
+  const g = ringGeometry(rings, vs, us);
+  return o.capEnd ? mergeGeometries([g, capGeometry(rings[rings.length - 1], true)]) : g;
+}
+// The stump: from just under the ground up to the cut at `h`, flaring toward the ground (`flare` × the radius there)
+// with the trunk's outline (`lobe`), capped with end grain. Group 0 is bark, group 1 the cut. `turn` is the trunk's
+// turn about the vertical, so the bark lines up with the trunk's.
+function stumpGeometry(R, h, flare, lobe, radial, turn) {
+  const rings = [], vs = [], us = [];
+  for (let k = 0; k <= 10; k++) {
+    const y = -0.1 + (h + 0.1) * Math.pow(k / 10, 1.5), spread = 1 + (flare - 1) * Math.pow(1 - Math.max(0, y) / h, 2);
+    rings.push(flatRing(y, radial, (phi) => R * spread * lobe(phi, y)));
+    vs.push(y);
+    us.push(-turn / (Math.PI * 2));
+  }
+  return mergeGeometries([ringGeometry(rings, vs, us), capGeometry(rings[10], true)], true);
+}
+// Stretches the v of a cylinder's side (its first vertices; the caps come after) from 0..1 to its length in metres,
+// to match limbGeometry.
+function metresUV(g, len) {
+  const uv = g.getAttribute("uv"), side = (g.parameters.radialSegments + 1) * (g.parameters.heightSegments + 1);
+  for (let i = 0; i < side; i++) uv.setY(i, uv.getY(i) * len);
+  return g;
+}
+
+// The trees outside the choppable ones: bushes, two pines, and a ring of forest beyond the meadow. All their leaves
+// are one mesh and their bark one mesh per material.
+function growFoliage() {
+  const rand = mulberry32(42), cards = newCards(), shadows = [], barkParts = new Map();
+  const pick = (weights) => { let r = rand() * weights.reduce((a, [, w]) => a + w, 0); for (const [k, w] of weights) if ((r -= w) <= 0) return k; return weights[0][0]; };
+  const bark = (mat, geo) => { if (!barkParts.has(mat)) barkParts.set(mat, []); barkParts.get(mat).push(geo); };
+  const clump = (cx, cy, cz, r, size, pal, kind, stiff, squash = 1) =>
+    addClump(cards, rand, cx, cy, cz, r, squash, { pal: PALETTES[pal], kind, size, density: 130, stiff });
 
   // Broadleaf: a tall trunk forking into branches, each ending in a leaf clump, plus a crown clump.
-  function broadleaf(x, z, s, hex) {
-    const tree = new THREE.Group(), H = (2.7 + rand() * 0.7) * s;
-    limb(tree, new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, H, 0), 0.3 * s, 0.15 * s);
-    const flare = new THREE.Mesh(new THREE.ConeGeometry(0.48 * s, 0.55 * s, 8), barkDark);
-    flare.position.y = 0.22 * s;
-    tree.add(flare);
-    const crown = H + 1.5 * s;
-    limb(tree, new THREE.Vector3(0, H - 0.1, 0), new THREE.Vector3(0, crown - 0.3 * s, 0), 0.15 * s, 0.07 * s);
-    clump(x, crown, z, 1.45 * s, 0.62 * s, hex, 0);
+  function broadleaf(x, z, s, pal, kind) {
+    const H = (2.7 + rand() * 0.7) * s, crown = H + 1.5 * s, at = (px, py, pz) => V3(x + px, py, z + pz);
+    bark(BARK.pine, limbGeometry([at(0, -0.1, 0), at(0, H * 0.5, 0), at(0, crown - 0.3 * s, 0)], 0.3 * s, 0.07 * s));
+    bark(BARK.dark, new THREE.ConeGeometry(0.48 * s, 0.55 * s, 8).translate(x, 0.22 * s, z));
+    clump(x, crown, z, 1.45 * s, (kind === LEAF.oak ? 0.75 : 0.62) * s, pal, kind, 0);
     const n = 4 + Math.floor(rand() * 3);
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2 + rand() * 0.7, d = (1.2 + rand() * 0.6) * s, y = H + (0.1 + rand() * 1.1) * s;
-      const fork = new THREE.Vector3(0, H * (0.6 + rand() * 0.25), 0), end = new THREE.Vector3(Math.cos(a) * d, y, Math.sin(a) * d);
-      limb(tree, fork, end, 0.11 * s, 0.05 * s);
-      clump(x + end.x, y + 0.25 * s, z + end.z, (0.85 + rand() * 0.35) * s, 0.58 * s, hex, 0);
+      const fy = H * (0.6 + rand() * 0.25), end = at(Math.cos(a) * d, y, Math.sin(a) * d);
+      bark(BARK.pine, limbGeometry([at(0, fy, 0), at(Math.cos(a) * d * 0.5, (fy + y) / 2 + 0.2 * s, Math.sin(a) * d * 0.5), end], 0.11 * s, 0.04 * s, 6));
+      clump(end.x, y + 0.25 * s, end.z, (0.85 + rand() * 0.35) * s, (kind === LEAF.oak ? 0.7 : 0.58) * s, pal, kind, 0);
     }
-    tree.position.set(x, 0, z);
-    scene.add(tree);
-    return crown;
+  }
+  // Birch: a slim white trunk with small clumps stacked up its top half.
+  function birch(x, z, s, pal) {
+    const H = (5.6 + rand() * 1.2) * s, lean = (rand() - 0.5) * 0.5;
+    bark(BARK.birch, limbGeometry([V3(x, -0.1, z), V3(x + lean * 0.5, H * 0.5, z), V3(x + lean * 0.2, H, z + lean * 0.3)], 0.16 * s, 0.04 * s, 7));
+    for (let i = 0; i < 5; i++) {
+      const f = 0.45 + 0.13 * i, a = i * 2.4 + rand(), d = (1.1 - 0.6 * f) * s;
+      clump(x + Math.cos(a) * d, H * f + 0.5 * s, z + Math.sin(a) * d, (1.05 - 0.4 * f) * s, 0.42 * s, pal, LEAF.birch, 0.2, 0.65);
+    }
   }
   // Pine: a straight trunk with tiers of flattened clumps getting smaller toward the tip.
+  // Pine (a fir): a cone of drooping tiers of needles, widest at the bottom, closing to a pointed tip; only the foot of
+  // the trunk shows, and it ends inside the top tiers.
   function pine(x, z, s) {
-    const tree = new THREE.Group(), H = 6.2 * s;
-    limb(tree, new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, H, 0), 0.22 * s, 0.06 * s);
-    tree.position.set(x, 0, z);
-    scene.add(tree);
-    for (let k = 0; k < 6; k++) {
-      const f = k / 6, r = (1.6 - 1.25 * f) * s, y = (1.5 + 4.6 * f) * s;
-      for (let j = 0; j < 3; j++) {
-        const a = rand() * Math.PI * 2, d = r * 0.35;
-        clump(x + Math.cos(a) * d, y, z + Math.sin(a) * d, r * 0.8, 0.5 * s, LEAVES.pine, 0.6, 0.5);
-      }
+    const H = (6.4 + rand() * 1.2) * s, base = 0.95 * s, tiers = 7 + ((rand() * 2) | 0), lean = (rand() - 0.5) * 0.12;
+    bark(BARK.pine, limbGeometry([V3(x, -0.1, z), V3(x, H * 0.4, z), V3(x + lean * 0.7, H * 0.7, z)], 0.21 * s, 0.05 * s, 8));
+    const skirt = (y, R, h, size) => addSkirt(cards, rand, x + lean * y / H, y, z, R, h,
+      { pal: PALETTES.pine, kind: LEAF.needles, size, density: 80, stiff: 0.6 });
+    for (let k = 0; k < tiers; k++) {
+      const f = k / tiers, y = base + (H - base) * f + 0.5 * s, step = (H - base) / tiers;
+      skirt(y, (2.0 * Math.pow(1 - f, 0.95) + 0.3) * s * (0.92 + rand() * 0.16), step * 0.75, (0.45 + 0.2 * (1 - f)) * s);
     }
-    return 4 * s;
+    skirt(H + 0.2 * s, 0.38 * s, 0.75 * s, 0.38 * s);   // the tip, a narrow spire on the last tier
   }
 
   const lift = 0.85 / sunDir.y;
   const shade = (x, z, h, r) => shadows.push([x - sunDir.x * h * lift, z - sunDir.z * h * lift, r]);
-  const broadColors = [["green", 4], ["orange", 3], ["gold", 2.5], ["red", 2], ["deep", 1.5]];
-  // Trees inside the meadow cast shadows and block walkers.
-  const INSIDE = [[-17, -15, 1.1], [-19, 5, 1.0], [-9, 15, 1.15], [14, 14, 1.05], [19, -13, 1.2], [4, -17, 0.95], [-4, 6, 1.0], [9, 9, 0.9]];
-  for (const [x, z, s] of INSIDE) {
-    if (pathDistance(x, z) < PATH_HALF + 2.5 * s) continue;
-    const crown = broadleaf(x, z, s, LEAVES[pick(broadColors)]);
-    OBSTACLES.push({ x, z, r: 0.55 * s });
-    shade(x, z, crown, 2.6 * s);
-  }
+  // (The trees inside the meadow are the choppable ones, planted later.)
   for (const [x, z, s] of [[18, 4, 0.8], [-12, -11, 0.75]]) {
-    if (pathDistance(x, z) < PATH_HALF + 2) continue;
+    if (pathDistance(x, z) < PATH_HALF + 2 || lakeDistance(x, z) < 3) continue;
     pine(x, z, s);
     OBSTACLES.push({ x, z, r: 0.45 * s });
+    FIXED.push({ x, z, r: 0.45 * s });
     shade(x, z, 3.2 * s, 1.6 * s);
   }
-  // Flowering and red bushes.
-  for (const [x, z] of [[-12, -1], [5, -11], [-15, 10], [13, -5], [-1, 13], [17, 8], [-21, -6]]) {
-    if (pathDistance(x, z) < PATH_HALF + 1.8) continue;
-    const hex = rand() < 0.5 ? LEAVES.blossom : LEAVES.red;
+  // Bushes in each grove's colours: maroon oak-leaf bushes, green birch-leaf bushes, pink and red by the lake.
+  const BUSHES = { autumn: [["maroon", LEAF.oak], ["ember", LEAF.oak]], birch: [["green", LEAF.birch], ["teal", LEAF.birch]],
+    silk: [["blossom", LEAF.pointed], ["maroon", LEAF.pointed]] };
+  for (const [x, z] of [[-12, -1], [5, -11], [-15, 10], [13, -5], [-1, 13], [17, 8], [-21, -6], [-8, 9], [10, -17]]) {
+    if (pathDistance(x, z) < PATH_HALF + 1.8 || lakeDistance(x, z) < 2.4) continue;
+    const [pal, kind] = BUSHES[zoneAt(x, z)][rand() < 0.5 ? 0 : 1], bc = newCards();
     for (let i = 0, n = 3 + Math.floor(rand() * 2); i < n; i++) {
       const a = rand() * Math.PI * 2, d = rand() * 0.8;
-      clump(x + Math.cos(a) * d, 0.55 + rand() * 0.25, z + Math.sin(a) * d, 0.75 + rand() * 0.3, 0.45, hex, 0.3);
+      addClump(bc, rand, x + Math.cos(a) * d, 0.55 + rand() * 0.25, z + Math.sin(a) * d, 0.75 + rand() * 0.3, 1,
+        { pal: PALETTES[pal], kind, size: kind === LEAF.oak ? 0.55 : 0.45, density: 130, stiff: 0.3 });
     }
-    OBSTACLES.push({ x, z, r: 1.15 });
+    const mesh = cardMesh(bc, foliageMat), obstacle = { x, z, r: 1.15 };
+    scene.add(mesh);
+    OBSTACLES.push(obstacle);
+    bushes.push({ x, z, r: 1.15, mesh, obstacle, hp: 2, wob: 0, gone: false, fx: PALETTES[pal].slice(1), slot: shadows.length < 16 ? shadows.length : -1 });
     shade(x, z, 0.7, 1.4);
   }
-  // A ring of forest beyond the meadow for depth: broadleaves and pines, no gameplay role.
+  // A ring of forest beyond the meadow for depth, in the colours of the grove it backs: no gameplay role.
+  const RING = { autumn: [["ember", 3], ["amber", 2], ["maroon", 1.5]], silk: [["green", 4], ["gold", 1.5], ["silk", 2]] };
   for (let i = 0; i < 34; i++) {
     const a = (i / 34) * Math.PI * 2 + rand() * 0.15, r = 27 + rand() * 9, x = Math.cos(a) * r, z = Math.sin(a) * r;
     if (pathDistance(x, z) < PATH_HALF + 3) continue;
-    if (rand() < 0.35) pine(x, z, 0.9 + rand() * 0.5);
-    else broadleaf(x, z, 1.1 + rand() * 0.4, LEAVES[pick(broadColors)]);
+    const zone = zoneAt(x, z), roll = rand();
+    if (zone === "birch") roll < 0.2 ? pine(x, z, 0.9 + rand() * 0.5) : birch(x, z, 1 + rand() * 0.3, roll < 0.45 ? "gold" : "teal");
+    else if (zone === "silk" && roll < 0.35) pine(x, z, 0.9 + rand() * 0.5);
+    else broadleaf(x, z, 1.1 + rand() * 0.4, pick(RING[zone]), zone === "autumn" ? LEAF.oak : LEAF.pointed);
   }
   shadows.slice(0, 16).forEach(([sx, sz, r], i) => uniforms.uTrees.value[i].set(sx, sz, r, 0));
+  treeShadowsUsed = Math.min(16, shadows.length);
 
-  const quad = new THREE.PlaneGeometry(1, 1), g = new THREE.InstancedBufferGeometry();
-  g.index = quad.index;
-  g.setAttribute("position", quad.getAttribute("position"));
-  g.setAttribute("cardPos", new THREE.InstancedBufferAttribute(new Float32Array(cardPos), 3));
-  g.setAttribute("clusterCenter", new THREE.InstancedBufferAttribute(new Float32Array(centers), 3));
-  g.setAttribute("clusterRadius", new THREE.InstancedBufferAttribute(new Float32Array(radii), 1));
-  g.setAttribute("leafColor", new THREE.InstancedBufferAttribute(new Float32Array(colors), 3));
-  g.setAttribute("cardInfo", new THREE.InstancedBufferAttribute(new Float32Array(info), 4));
-  g.instanceCount = radii.length;
-  const canopies = new THREE.Mesh(g, foliageMat);
-  canopies.frustumCulled = false;
-  scene.add(canopies);
-  return radii.length;
+  for (const [mat, parts] of barkParts) scene.add(new THREE.Mesh(mergeGeometries(parts), mat));
+  scene.add(cardMesh(cards, foliageMat));
+  return cards.radii.length;
 }
+
+// ---------- lake water: clear turquoise shallows, deep blue middle, foam that washes the shore, real reflections
+
+const lake = new Reflector(new THREE.PlaneGeometry(30, 26), { textureWidth: 512, textureHeight: 512, clipBias: 0.01 });
+lake.rotation.x = -Math.PI / 2;
+lake.position.set(LAKE.x, -0.01, LAKE.z);
+uniforms.tReflect = { value: lake.getRenderTarget().texture };
+uniforms.uReflectMatrix = { value: lake.material.uniforms.textureMatrix.value };
+lake.material = new THREE.ShaderMaterial({
+  uniforms,
+  transparent: true,
+  depthWrite: false,
+  vertexShader: /* glsl */ `
+    uniform mat4 uReflectMatrix;
+    varying vec4 vRefl; varying vec3 vWorld; varying float vDepth;
+    void main() {
+      vRefl = uReflectMatrix * vec4(position, 1.0);
+      vec4 w = modelMatrix * vec4(position, 1.0);
+      vWorld = w.xyz;
+      vec4 mv = viewMatrix * w;
+      vDepth = -mv.z;
+      gl_Position = projectionMatrix * mv;
+    }`,
+  fragmentShader: /* glsl */ `
+    ${COMMON} ${SHADE}
+    uniform sampler2D tReflect, uTrample;
+    uniform vec4 uTrampleRect;
+    uniform vec4 uRipples[${RIPPLES}];
+    uniform vec4 uFeet[9];
+    uniform vec3 uShallow, uMidWater, uDeepWater;
+    varying vec4 vRefl; varying vec3 vWorld; varying float vDepth;
+    void main() {
+      vec2 xz = vWorld.xz;
+      float level = -0.03 + 0.02 * sin(uTime * 0.8) + 0.008 * sin(uTime * 2.1 + 1.0);
+      float d = level - groundHeight(xz);                    // depth here, right now
+      if (d < 0.0) discard;
+      float rough = 0.6 + 1.6 * uWind;
+      vec2 ripple = (vec2(noise(xz * 1.4 + uWindDir * uTime * (0.4 + 1.2 * uWind)), noise(xz * 1.4 - uTime * 0.3 + 7.0)) - 0.5) * rough;
+      // Rings spreading out from each step taken in the water.
+      float rings = 0.0;
+      vec2 push = vec2(0.0);
+      for (int i = 0; i < ${RIPPLES}; i++) {
+        vec4 rp = uRipples[i];
+        float age = uTime - rp.z;
+        if (age < 0.0 || age > 2.2) continue;
+        vec2 dv = xz - rp.xy;
+        float dist = length(dv), radius = 0.15 + age * 0.85;
+        float band = exp(-pow((dist - radius) / (0.05 + age * 0.035), 2.0)) * (1.0 - age / 2.2) * rp.w;
+        rings += band;
+        push += dv / max(dist, 1e-3) * band;
+      }
+      vec4 r = vRefl;
+      r.xy += (ripple * 0.05 + push * 0.06) * r.w;
+      vec3 refl = texture2DProj(tReflect, r).rgb;
+      vec3 col = mix(uShallow, uMidWater, smoothstep(0.0, 0.8, d));
+      col = mix(col, uDeepWater, smoothstep(0.6, 2.4, d));
+      float cs = cloudShadow(xz);
+      vec3 sunLit = uSunCol * uSun * (1.0 - cs);
+      vec3 lit = col * (uAmbient * mix(vec3(1.0), uShadowTint, cs * 0.6) + sunLit * 0.75);
+      lit = mix(lit, refl, 0.16 + 0.16 * uStorm);
+      lit = max(mix(vec3(dot(lit, vec3(0.299, 0.587, 0.114))), lit, 1.35), 0.0);   // AgX mutes the turquoise; push it back
+      // Foam: a ragged line where the wash meets the sand, bands rolling in, whitecaps in a storm.
+      float edge = 1.0 - smoothstep(0.0, 0.035 + 0.04 * noise(xz * 3.0 + uTime), d);
+      float rolling = smoothstep(0.9, 0.96, fract(d * 2.2 - uTime * (0.25 + 0.4 * uWind) + noise(xz * 0.8) * 0.7));
+      rolling *= (1.0 - smoothstep(0.15, 0.9, d)) * step(0.5, noise(xz * 2.4 + uTime * 0.3));
+      float caps = step(0.9 - 0.12 * uStorm, noise(xz * 1.8 + uWindDir * uTime * 1.5)) * uStorm * smoothstep(0.8, 2.0, d);
+      // Churned water left behind by anyone who waded through (the same trample map the grass uses).
+      float churn = texture2D(uTrample, (xz - uTrampleRect.xy) / uTrampleRect.z).b;
+      float trail = churn * smoothstep(0.4, 0.7, noise(xz * 7.0 + uTime * 2.0)) * 0.9;
+      // A ring of foam hugging the legs of whoever is standing in the water.
+      float legs = 0.0;
+      for (int i = 0; i < 9; i++) {
+        if (uFeet[i].z < 0.5) continue;
+        float fd = length(xz - uFeet[i].xy);
+        legs = max(legs, exp(-pow((fd - uFeet[i].w) / 0.06, 2.0)) * (0.65 + 0.35 * noise(xz * 9.0 + uTime * 3.0)));
+      }
+      float foam = max(max(max(edge, rolling), caps), max(max(trail, legs), min(rings, 1.0) * 0.5));
+      lit = mix(lit, vec3(0.95) * (uAmbient + sunLit * 0.6), foam * 0.85);
+      lit += min(rings, 1.0) * 0.4 * (uAmbient + sunLit * 0.5);   // bright crests of the step rings
+      // Sun glints on open water, gone under clouds and in a storm.
+      lit += step(0.94, noise(xz * 5.0 + uTime * 0.6)) * step(0.3, d) * 0.5 * uSun * (1.0 - cs) * (1.0 - uStorm);
+      lit = mix(lit, uSky, smoothstep(uFogNear, uFogFar, vDepth));
+      gl_FragColor = vec4(lit, max(mix(0.62, 0.95, smoothstep(0.0, 0.7, d)), foam));
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+    }`,
+});
+scene.add(lake);
+
+// ---------- light: two looks for the whole scene. Golden hour follows the Tree Damage reel: a violet sky fading to
+// pink at the horizon, warm low sun, lavender shade, golden grass and white-pink clouds. Day is the clear midday look.
+// sky: zenith, mid sky, horizon (also the haze far things fade into); cloud: lit and shaded side, how much sky they
+// cover; sun: colour and strength; ambient and shadowTint: shade and cloud-shadow colour; hemi: sky and ground light
+// on the models; grass: blade colour root → mid → tip, and the cool/warm patch tints.
+const LOOKS = {
+  golden: { sky: ["#3f56c8", "#9a6ad6", "#f6d4dc"], cloud: ["#fff8f2", "#e2bcda", 0.42], sun: ["#ffd49a", 1.45],
+    ambient: "#b9b0c2", shadowTint: "#8f7cc0", hemi: ["#ead6ff", "#8a7a22"], exposure: 1.12, fog: [70, 170],
+    grass: { root: "#3c5208", mid: "#9fae1c", tip: "#f2e23a", cool: "#dcf59a", warm: "#ffd24a" } },
+  day: { sky: ["#86b9e6", "#a8cdec", "#b9d8ee"], cloud: ["#ffffff", "#c6d4e4", 0.3], sun: ["#fff1d6", 1.25],
+    ambient: "#9fb7c9", shadowTint: "#7f9bc0", hemi: ["#e3f1ff", "#6c9a48"], exposure: 1.1, fog: [75, 170],
+    grass: { root: "#2f6a2e", mid: "#5fae3e", tip: "#b9e676", cool: "#cfe9df", warm: "#fff3c4" } },
+};
+let look = LOOKS.golden;
 
 // ---------- weather: the wind slider also brings in the storm
 
@@ -712,7 +1430,7 @@ function setWind(v) {
   uniforms.uWind.value = v;
   const storm = THREE.MathUtils.smoothstep(v, 0.6, 1.0);
   uniforms.uStorm.value = storm;
-  uniforms.uSun.value = THREE.MathUtils.lerp(1.25, 0.35, storm);
+  uniforms.uSun.value = THREE.MathUtils.lerp(look.sun[1], 0.35, storm);
   uniforms.uSky.value.lerpColors(calmSky, stormSky, storm);
   uniforms.uAmbient.value.lerpColors(calmAmb, stormAmb, storm);
   scene.background = uniforms.uSky.value;
@@ -721,6 +1439,69 @@ function setWind(v) {
 }
 $("wind").addEventListener("input", (e) => setWind(Number(e.target.value)));
 setWind(0.35);
+
+// ---------- sky: a dome round the camera with the look's colours, the sun's glow, and painterly clouds drifting
+// on the wind (more of them, and greyer, in a storm)
+Object.assign(uniforms, { uSkyTop: { value: new THREE.Color() }, uSkyMid: { value: new THREE.Color() },
+  uCloudLit: { value: new THREE.Color() }, uCloudShade: { value: new THREE.Color() }, uCloudCover: { value: 0.4 } });
+const skyDome = new THREE.Mesh(new THREE.SphereGeometry(330, 48, 24), new THREE.ShaderMaterial({
+  uniforms, side: THREE.BackSide, depthWrite: false,
+  vertexShader: /* glsl */ `
+    varying vec3 vDir;
+    void main() {
+      vDir = position;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }`,
+  fragmentShader: /* glsl */ `
+    ${COMMON}
+    uniform vec3 uSky, uSkyTop, uSkyMid, uCloudLit, uCloudShade, uSunDir, uSunCol;
+    uniform float uCloudCover;
+    varying vec3 vDir;
+    float clouds(vec2 q) { return fbm(q * 0.9) * 0.65 + fbm(q * 2.3 + 7.0) * 0.35; }
+    void main() {
+      vec3 d = normalize(vDir);
+      float h = max(d.y, 0.0), sunAmt = max(dot(d, uSunDir), 0.0), calm = 1.0 - uStorm;
+      vec3 col = mix(uSky, uSkyMid, smoothstep(0.0, 0.14, h));
+      col = mix(col, uSkyTop, smoothstep(0.12, 0.6, h));
+      col += uSunCol * (pow(sunAmt, 6.0) * 0.22 + pow(sunAmt, 300.0) * 1.2) * calm;
+      // Cumulus on a plane overhead: lit on the side facing the sun (thinner a step sunward), shaded underneath.
+      vec2 q = d.xz / (d.y + 0.12) * 1.3 + uWindDir * uTime * (0.01 + 0.03 * uWind);
+      float n = clouds(q), cover = uCloudCover + 0.35 * uStorm;
+      float a = smoothstep(1.0 - cover, 1.0 - cover + 0.1, n) * smoothstep(0.0, 0.07, d.y);   // thinning into the haze
+      float lit = clamp(0.55 + (n - clouds(q + uSunDir.xz * 0.3)) * 4.0 + 0.25 * sunAmt, 0.0, 1.0);
+      vec3 cloud = mix(uCloudShade, uCloudLit, lit);
+      cloud = mix(cloud, vec3(dot(cloud, vec3(0.3, 0.5, 0.2))) * 0.62, uStorm);
+      col = mix(col, cloud, a * 0.96);
+      col = max(mix(vec3(dot(col, vec3(0.299, 0.587, 0.114))), col, 1.25), 0.0);   // AgX mutes the sky too; push it back
+      gl_FragColor = vec4(col, 1.0);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+    }`,
+}));
+skyDome.renderOrder = -1;
+skyDome.frustumCulled = false;
+scene.add(skyDome);
+
+// Applies a look (LOOKS) to the sky, light, shade and grass; the storm then blends from it.
+function setLook(key) {
+  look = LOOKS[key];
+  uniforms.uSkyTop.value.set(look.sky[0]);
+  uniforms.uSkyMid.value.set(look.sky[1]);
+  calmSky.set(look.sky[2]);
+  uniforms.uCloudLit.value.set(look.cloud[0]);
+  uniforms.uCloudShade.value.set(look.cloud[1]);
+  uniforms.uCloudCover.value = look.cloud[2];
+  uniforms.uSunCol.value.set(look.sun[0]);
+  calmAmb.set(look.ambient);
+  uniforms.uShadowTint.value.set(look.shadowTint);
+  [uniforms.uFogNear.value, uniforms.uFogFar.value] = look.fog;
+  for (const k of ["root", "mid", "tip", "cool", "warm"]) colors[k].set(look.grass[k]);
+  renderer.toneMappingExposure = look.exposure;
+  setWind(uniforms.uWind.value);
+  document.querySelectorAll("[data-look]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.look === key)));
+}
+document.querySelectorAll("[data-look]").forEach((b) => b.addEventListener("click", () => { setLook(b.dataset.look); lightModels(); }));
+setLook("golden");
 
 document.querySelectorAll("[data-density]").forEach((b) => b.addEventListener("click", () => plantGrass(b.dataset.density)));
 plantGrass(coarse ? "light" : "normal");
@@ -739,6 +1520,13 @@ const hemi = new THREE.HemisphereLight(0xe3f1ff, 0x6c9a48, 1.3);
 const sun = new THREE.DirectionalLight(0xfff1d6, 2.3);
 sun.position.copy(sunDir).multiplyScalar(20);
 scene.add(hemi, sun);
+// The lights on the models (bark, logs, characters, mounts) take the look's colours.
+function lightModels() {
+  hemi.color.set(look.hemi[0]);
+  hemi.groundColor.set(look.hemi[1]);
+  sun.color.set(look.sun[0]);
+}
+lightModels();
 const toonRamp = new THREE.DataTexture(new Uint8Array([110, 185, 255]), 3, 1, THREE.RedFormat);
 toonRamp.minFilter = toonRamp.magFilter = THREE.NearestFilter;
 toonRamp.needsUpdate = true;
@@ -781,72 +1569,2051 @@ const walkers = [
   makeChibi({ tunic: "#d94a4a", scarf: "#f2c339", hair: "#e9c47a", pants: "#4d5a6b", speed: 1.7, wander: true }),
   makeChibi({ tunic: "#3fb36b", scarf: "#2bb3a3", hair: "#2a2a35", pants: "#6b4a3a", speed: 1.5, wander: true }),
 ];
-hero.pos.set(-12, 0, 7);
+hero.pos.set(10, 0, 1.5);   // on the path, looking across the lake
 walkers[1].pos.set(6, 0, -10);
-walkers[2].pos.set(12, 0, 8);
+walkers[2].pos.set(-2, 0, -12);
 
 const HALF = FIELD / 2 - 1.5;
 const clampField = (v) => Math.max(-HALF, Math.min(HALF, v));
 const blocked = (x, z, pad = 0.4) => OBSTACLES.some((o) => Math.hypot(x - o.x, z - o.z) < o.r + pad);
+const dropObstacle = (o) => { const k = OBSTACLES.indexOf(o); if (k >= 0) OBSTACLES.splice(k, 1); };
 function pickWanderTarget(w) {
   for (let tries = 0; tries < 20; tries++) {
     const a = Math.random() * Math.PI * 2, r = 5 + Math.random() * 9;
     const x = clampField(w.pos.x + Math.cos(a) * r), z = clampField(w.pos.z + Math.sin(a) * r);
-    if (!blocked(x, z)) return new THREE.Vector3(x, 0, z);
+    if (!blocked(x, z) && groundHeight(x, z) > -0.3) return new THREE.Vector3(x, 0, z);
   }
   return null;
 }
 const angleTo = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 const shadowOffset = new THREE.Vector2(-sunDir.x, -sunDir.z).multiplyScalar(0.28);
 
+// Moves w toward w.target, steering around trees and bushes and stopping at water deeper than `wade`.
+// Water slows it down unless it `swims`. Returns true while it is moving.
+function travel(w, dt, maxSpeed, wade, swims = false) {
+  const dx = w.target.x - w.pos.x, dz = w.target.z - w.pos.z, d = Math.hypot(dx, dz);
+  if (d < 0.06) { w.target = null; w.idle = 0; return false; }
+  let vx = dx / d, vz = dz / d;
+  for (const o of OBSTACLES) {
+    const ox = w.pos.x - o.x, oz = w.pos.z - o.z, od = Math.hypot(ox, oz), reach = o.r + 1.0;
+    if (od < reach && od > 1e-4) { const k = (1 - od / reach) * 2.4; vx += (ox / od) * k; vz += (oz / od) * k; }
+  }
+  const wading = waterLevel(uniforms.uTime.value) - groundHeight(w.pos.x, w.pos.z) > 0.01;
+  const vl = Math.hypot(vx, vz) || 1, step = Math.min(d, maxSpeed * (wading && !swims ? 0.6 : 1) * dt);
+  const fromX = w.pos.x, fromZ = w.pos.z;
+  w.pos.x += (vx / vl) * step;
+  w.pos.z += (vz / vl) * step;
+  for (const o of OBSTACLES) {
+    const ox = w.pos.x - o.x, oz = w.pos.z - o.z, od = Math.hypot(ox, oz);
+    if (od < o.r && od > 1e-4) { w.pos.x = o.x + (ox / od) * o.r; w.pos.z = o.z + (oz / od) * o.r; }
+  }
+  if (groundHeight(w.pos.x, w.pos.z) < wade) { w.pos.x = fromX; w.pos.z = fromZ; w.target = null; w.idle = 0; }
+  // Give up on a target that cannot be reached (inside a bush, say).
+  if (w.target) {
+    const left = Math.hypot(w.target.x - w.pos.x, w.target.z - w.pos.z);
+    w.stuck = left > d - step * 0.3 ? (w.stuck || 0) + dt : 0;
+    if (w.stuck > 0.8) { w.target = null; w.idle = 0; w.stuck = 0; }
+  }
+  w.heading += angleTo(Math.atan2(vx, vz), w.heading) * Math.min(1, dt * 10);
+  return true;
+}
+
 function stepWalker(w, i, dt, now) {
+  if (w === hero && (hero.riding || hero.mounting !== null)) { poseRider(i, now); return; }
+  if (w === hero && hero.task && stepJob(i, dt)) return;
+  if (w === hero && hero.wantsMount) {
+    // Walk round to the mount's left side, then climb on.
+    const side = mountSide(hero.mount);
+    hero.target = side;
+    if (Math.hypot(hero.pos.x - side.x, hero.pos.z - side.z) < 0.35) { hero.wantsMount = false; hero.target = null; hero.mounting = now; hero.mountFrom = hero.root.position.clone(); }
+  }
   let moving = false;
   if (!w.target) {
     w.idle += dt;
     // The hero wanders too once you leave it alone for a while, so the meadow is never still.
     if ((w.wander && w.idle > w.wait) || (!w.wander && w.idle > 8)) { w.target = pickWanderTarget(w); w.wait = 0.5 + Math.random() * 2.5; }
   }
-  if (w.target) {
-    const dx = w.target.x - w.pos.x, dz = w.target.z - w.pos.z, d = Math.hypot(dx, dz);
-    if (d < 0.06) { w.target = null; w.idle = 0; }
-    else {
-      // Head for the target, pushed sideways by any tree or bush close ahead.
-      let vx = dx / d, vz = dz / d;
-      for (const o of OBSTACLES) {
-        const ox = w.pos.x - o.x, oz = w.pos.z - o.z, od = Math.hypot(ox, oz), reach = o.r + 1.0;
-        if (od < reach && od > 1e-4) { const k = (1 - od / reach) * 2.4; vx += (ox / od) * k; vz += (oz / od) * k; }
-      }
-      const vl = Math.hypot(vx, vz) || 1, step = Math.min(d, w.maxSpeed * dt);
-      w.pos.x += (vx / vl) * step;
-      w.pos.z += (vz / vl) * step;
-      for (const o of OBSTACLES) {
-        const ox = w.pos.x - o.x, oz = w.pos.z - o.z, od = Math.hypot(ox, oz);
-        if (od < o.r && od > 1e-4) { w.pos.x = o.x + (ox / od) * o.r; w.pos.z = o.z + (oz / od) * o.r; }
-      }
-      // Give up on a target that cannot be reached (inside a bush, say).
-      const left = Math.hypot(w.target.x - w.pos.x, w.target.z - w.pos.z);
-      w.stuck = left > d - step * 0.3 ? (w.stuck || 0) + dt : 0;
-      if (w.stuck > 0.8) { w.target = null; w.idle = 0; w.stuck = 0; }
-      w.heading += angleTo(Math.atan2(vx, vz), w.heading) * Math.min(1, dt * 10);
-      moving = true;
-    }
-  }
+  if (w.target) moving = travel(w, dt, w.maxSpeed, WADE);
   w.speed += ((moving ? 1 : 0) - w.speed) * Math.min(1, dt * 8);
   w.phase += dt * (6 + 3.5 * w.maxSpeed) * w.speed;
   const s = Math.sin(w.phase), sp = w.speed;
+  w.legL.rotation.z = w.legR.rotation.z = w.armL.rotation.z = w.armR.rotation.z = 0;
   w.legL.rotation.x = s * 0.8 * sp;
   w.legR.rotation.x = -s * 0.8 * sp;
   w.armL.rotation.x = -s * 0.7 * sp;
   w.armR.rotation.x = s * 0.7 * sp;
+  if (w === hero && hero.lift > 0) w.armL.rotation.x = w.armR.rotation.x = -2.9 * smooth01((0.85 - hero.lift) / 0.15) * smooth01(hero.lift / 0.2);   // log overhead
   w.body.position.y = Math.abs(Math.cos(w.phase)) * 0.05 * sp;
   w.body.rotation.x = 0.12 * sp;
   w.body.scale.y = 1 + Math.sin(now * 0.0025 + i) * 0.012 * (1 - sp);
   w.head.rotation.z = Math.sin(w.phase * 0.5) * 0.05 * sp;
-  w.root.position.copy(w.pos);
+  w.root.position.set(w.pos.x, groundHeight(w.pos.x, w.pos.z), w.pos.z);
   w.root.rotation.y = w.heading;
   stampTrample(w.pos.x, w.pos.z, 0.55 + 0.1 * sp);
+  travelFx(w, dt, sp * w.maxSpeed, 0.6);
+  const inWater = waterLevel(uniforms.uTime.value) - groundHeight(w.pos.x, w.pos.z) > 0.01;
+  uniforms.uFeet.value[i].set(w.pos.x, w.pos.z, inWater ? 1 : 0, 0.24);
+  if (inWater && !reduced) {
+    w.splash = (w.splash ?? 0) - dt;
+    if (w.splash <= 0) { addRipple(w.pos.x, w.pos.z, sp > 0.3 ? 1 : 0.45); w.splash = sp > 0.3 ? 0.3 : 1.4; }
+  }
   uniforms.uWalkers.value[i].set(w.pos.x + shadowOffset.x, w.pos.z + shadowOffset.y, 0.5, 0);
 }
+
+// ---------- the horse, built from art/models/horse/model-sheet-horse-v1.png
+
+function makeHorse() {
+  const C = {
+    coat: "#a8632f", sock: "#5b3a26", hoof: "#4b4a52", mane: "#4a2c1a", muzzle: "#ecd0ae", blaze: "#f7efe6", eye: "#1d1d26",
+    leather: "#7b3424", leatherDark: "#5c2618", blanket: "#2e8a84", gold: "#e0ad3c", strap: "#5a3420",
+  };
+  const root = new THREE.Group(), body = new THREE.Group(), tack = new THREE.Group();
+  root.add(body);
+  const add = (parent, geo, hex, x, y, z, sx = 1, sy = 1, sz = 1) => {
+    const m = new THREE.Mesh(geo, toon(hex));
+    m.position.set(x, y, z);
+    m.scale.set(sx, sy, sz);
+    parent.add(m);
+    return m;
+  };
+  const ball = (r) => new THREE.SphereGeometry(r, 20, 14);
+
+  // Round barrel with a chest and a rump, and a girth strap.
+  add(body, new THREE.CapsuleGeometry(0.24, 0.5, 6, 16).rotateX(Math.PI / 2), C.coat, 0, 0.8, -0.02, 0.92, 1, 1);
+  add(body, ball(0.26), C.coat, 0, 0.83, 0.3, 0.9, 0.95, 0.9);
+  add(body, ball(0.27), C.coat, 0, 0.84, -0.33, 0.95, 0.95, 0.9);
+  add(body, new THREE.TorusGeometry(0.236, 0.018, 6, 28), C.strap, 0, 0.8, 0.14, 0.93, 1, 1);
+
+  // Short sturdy legs: coat on top, dark socks, grey hooves. Pivots sit at the shoulder and hip.
+  const legs = {};
+  for (const [name, x, z, front] of [["fl", 0.13, 0.33, true], ["fr", -0.13, 0.33, true], ["bl", 0.13, -0.37, false], ["br", -0.13, -0.37, false]]) {
+    const pivot = new THREE.Group();
+    pivot.position.set(x, 0.66, z);
+    add(pivot, new THREE.CapsuleGeometry(front ? 0.08 : 0.092, 0.2, 4, 10), C.coat, 0, -0.14, 0);
+    add(pivot, new THREE.CapsuleGeometry(0.072, 0.2, 4, 10), C.sock, 0, -0.4, 0);
+    add(pivot, new THREE.CylinderGeometry(0.08, 0.093, 0.075, 12), C.hoof, 0, -0.62, 0.01);
+    body.add(pivot);
+    legs[name] = pivot;
+  }
+
+  // Neck pivots at the chest so the head can drop to graze.
+  const neck = new THREE.Group();
+  neck.position.set(0, 0.98, 0.36);
+  body.add(neck);
+  add(neck, new THREE.CapsuleGeometry(0.125, 0.3, 4, 12), C.coat, 0, 0.16, 0.07).rotation.x = 0.42;
+  for (let k = 0; k < 6; k++) {
+    const t = k / 5;
+    add(neck, ball(0.07), C.mane, (k % 2 ? 0.035 : -0.02), 0.07 + 0.34 * t, -0.07 + 0.13 * t, 0.75, 1.35, 0.9).rotation.x = 0.55;
+  }
+  const head = new THREE.Group();
+  head.position.set(0, 0.42, 0.2);
+  neck.add(head);
+  add(head, ball(0.17), C.coat, 0, 0, 0, 0.88, 0.95, 1.05);
+  add(head, ball(0.125), C.muzzle, 0, -0.08, 0.17, 0.95, 0.85, 1.05);
+  add(head, ball(0.05), C.blaze, 0, 0.03, 0.163, 0.7, 2.1, 0.35);
+  add(head, ball(0.065), C.mane, 0, 0.16, 0.07, 1.25, 0.7, 1.3);
+  for (const sx of [-1, 1]) {
+    add(head, ball(0.022), "#6b4a3a", sx * 0.045, -0.065, 0.285);
+    add(head, ball(0.043), C.eye, sx * 0.128, 0.04, 0.085, 0.55, 1.15, 1);
+    add(head, ball(0.013), "#ffffff", sx * 0.15, 0.06, 0.1);
+    const ear = add(head, new THREE.ConeGeometry(0.05, 0.14, 8), C.coat, sx * 0.075, 0.18, -0.03);
+    ear.rotation.z = -sx * 0.25;
+    add(head, new THREE.TorusGeometry(0.02, 0.006, 6, 12), C.gold, sx * 0.12, -0.1, 0.2).rotation.y = Math.PI / 2;
+    add(head, new THREE.BoxGeometry(0.012, 0.22, 0.02), C.strap, sx * 0.142, 0.0, 0.08).rotation.x = 0.3;
+  }
+  add(head, new THREE.TorusGeometry(0.112, 0.012, 6, 22), C.strap, 0, -0.07, 0.17, 0.95, 0.85, 1);
+  // Reins resting on the neck, from the bit back to the withers.
+  for (const sx of [-1, 1]) {
+    const curve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(sx * 0.12, 0.32, 0.4), new THREE.Vector3(sx * 0.15, 0.16, 0.22), new THREE.Vector3(sx * 0.12, 0.02, -0.04),
+    ]);
+    neck.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 12, 0.008, 5), toon(C.strap)));
+  }
+
+  // Chunky tail.
+  const tail = new THREE.Group();
+  tail.position.set(0, 0.95, -0.56);
+  body.add(tail);
+  add(tail, ball(0.09), C.mane, 0, -0.04, -0.06, 0.9, 1.2, 1);
+  add(tail, ball(0.1), C.mane, 0, -0.2, -0.12, 0.9, 1.5, 0.9);
+  add(tail, ball(0.085), C.mane, 0, -0.4, -0.13, 0.85, 1.6, 0.85);
+
+  // Tack: teal blanket with gold trim, red-brown saddle, stirrups.
+  body.add(tack);
+  add(tack, new THREE.BoxGeometry(0.5, 0.035, 0.5), C.blanket, 0, 1.035, -0.02);
+  for (const sx of [-1, 1]) {
+    add(tack, new THREE.BoxGeometry(0.03, 0.24, 0.5), C.blanket, sx * 0.24, 0.93, -0.02).rotation.z = sx * 0.18;
+    add(tack, new THREE.BoxGeometry(0.035, 0.035, 0.52), C.gold, sx * 0.262, 0.815, -0.02);
+    add(tack, new THREE.BoxGeometry(0.025, 0.18, 0.26), C.leatherDark, sx * 0.235, 0.98, -0.02).rotation.z = sx * 0.15;
+    add(tack, new THREE.BoxGeometry(0.02, 0.36, 0.035), C.strap, sx * 0.252, 0.8, 0.03);
+    add(tack, new THREE.TorusGeometry(0.045, 0.012, 6, 14), C.gold, sx * 0.256, 0.6, 0.03).rotation.y = Math.PI / 2;
+  }
+  add(tack, new THREE.BoxGeometry(0.28, 0.08, 0.36), C.leather, 0, 1.085, -0.02);
+  add(tack, ball(0.06), C.leather, 0, 1.13, 0.15, 1.2, 1, 0.9);
+  add(tack, new THREE.BoxGeometry(0.24, 0.08, 0.05), C.leatherDark, 0, 1.14, -0.18);
+
+  scene.add(root);
+  return { root, body, neck, head, tail, legs, pos: new THREE.Vector3(), home: new THREE.Vector3(), target: null,
+    heading: 0, vel: 0, phase: 0, idle: 0, wait: 3, graze: 0, grazeT: 0, stuck: 0, splash: 0 };
+}
+
+// A mount without a stand-in body: it appears when its model has loaded.
+function makeMount() {
+  const root = new THREE.Group();
+  scene.add(root);
+  return { root, body: null, pos: new THREE.Vector3(), home: new THREE.Vector3(), target: null,
+    heading: 0, vel: 0, phase: 0, idle: 0, wait: 3, graze: 0, grazeT: 0, stuck: 0, splash: 0 };
+}
+// The nearest dry, open spot to (x, z), spiralling outward.
+function freeSpot(x, z) {
+  for (let r = 0; r < 12; r += 0.5) {
+    for (let a = 0; a < Math.PI * 2; a += 0.5) {
+      const px = clampField(x + Math.cos(a) * r), pz = clampField(z + Math.sin(a) * r);
+      if (!blocked(px, pz, 1.0) && groundHeight(px, pz) > -0.05) return new THREE.Vector3(px, 0, pz);
+    }
+  }
+  return new THREE.Vector3(x, 0, z);
+}
+
+// Per-mount settings. fast: the clip for high speed, used above fastAt m/s; walk: the moving clip below that
+// (default "Walk"); clipSpeed: m/s each clip's stride was made for; rideSpeed / stroll: ridden and wandering speed;
+// wade: deepest water it walks into; float: swimmers only, how far below the water surface its origin settles in
+// deep water (it also keeps full speed in water); side: how far beside it the hero climbs on; seatBone / seatHeight:
+// what the rider sits on and how high; springs: bone chains with spring physics (three.js drops "." from node
+// names); slot: its shadow and footprint slot in the shaders.
+const horse = Object.assign(makeHorse(), { key: "horse", label: "Horse", cfg: {
+  url: "../models/horse/generated/horse.glb", fast: "Gallop", fastAt: 2.6, clipSpeed: { Walk: 1.35, Gallop: 5.0 },
+  rideSpeed: 5.5, stroll: 1.0, wade: -0.85, side: 0.75, seatBone: "spine", seatHeight: 0.84,
+  springs: [["tail1", "tail2", "tail3"]], slot: 3, shadow: 0.9, foot: 0.55, verb: "gallop" } });
+const bird = Object.assign(makeMount(), { key: "bird", label: "Thunder Runner", cfg: {
+  url: "../models/biped/generated/thunder.glb", fast: "Run", fastAt: 2.2, clipSpeed: { Walk: 1.09, Run: 3.75 },
+  rideSpeed: 4.6, stroll: 0.9, wade: -0.75, side: 0.7, seatBone: "pelvis", seatHeight: 1.0,
+  springs: [
+    { bones: ["crestF1", "crestF2"], stiffness: [0.24, 0.16], gravity: [0.03, 0.06] },
+    { bones: ["crestU1", "crestU2"], stiffness: [0.24, 0.16], gravity: [0.03, 0.06] },
+    { bones: ["crestB1", "crestB2", "crestB3"], stiffness: [0.22, 0.15, 0.1], gravity: [0.03, 0.06, 0.09] },
+    { bones: ["tailU1", "tailU2", "tailU3"], stiffness: [0.2, 0.13, 0.09], gravity: [0.08, 0.15, 0.22] },
+    ["tailC1", "tailC2", "tailC3"],
+    { bones: ["tailD1", "tailD2", "tailD3"], stiffness: [0.12, 0.08, 0.06], gravity: [0.2, 0.3, 0.4] },
+    { bones: ["featherArmL"], stiffness: [0.18], gravity: [0.25], tipLength: 0.2 },
+    { bones: ["featherArmR"], stiffness: [0.18], gravity: [0.25], tipLength: 0.2 },
+  ], slot: 4, shadow: 0.8, foot: 0.45, verb: "run" } });
+// The Abyssal Lantern Serpent hovers 0.22 m up in every clip and floats, so it can swim right across the lake.
+const serpent = Object.assign(makeMount(), { key: "serpent", label: "Lantern Serpent", cfg: {
+  url: "../models/serpent/generated/serpent.glb", walk: "Swim", fast: "Dash", fastAt: 2.8, clipSpeed: { Swim: 2.2, Dash: 3.4 },
+  rideSpeed: 3.6, stroll: 1.0, wade: -5, float: 0.55, side: 1.0, seatBone: "spine", seatHeight: 0.95,
+  springs: [
+    { bones: ["antennaL1", "antennaL2", "antennaL3"], stiffness: [0.2, 0.12, 0.08], gravity: [0.05, 0.12, 0.3] },
+    { bones: ["antennaR1", "antennaR2", "antennaR3"], stiffness: [0.2, 0.12, 0.08], gravity: [0.05, 0.12, 0.3] },
+  ], slot: 5, shadow: 1.3, foot: 0.6, verb: "swim",
+  // travel effects: presses grass and churns water along its whole body, and sheds glowing motes
+  chain: true, bodyRadius: 0.42, glow: { size: 0.14, idle: 6, moving: 30 } } });
+const mounts = [horse, bird, serpent];
+horse.pos.set(5, 0, 3);
+horse.heading = 2.2;
+bird.pos.copy(freeSpot(2, 6.5));
+bird.heading = 2.8;
+serpent.pos.copy(freeSpot(13.6, 5.5));   // on the lake's south-east shore, lying along it with its left side inland
+serpent.heading = 0.72;
+
+// The baby Lantern Serpent: a pet that swims after the hero, or after whatever the hero rides. Not rideable. It is
+// 0.7 m long, so its clips play several times faster than their own stride to keep up (maxRate).
+const pet = Object.assign(makeMount(), { key: "pet", cfg: {
+  url: "../models/serpent/generated/serpent-baby.glb", walk: "Swim", fast: "Dash", fastAt: 1.8,
+  clipSpeed: { Swim: 0.31, Dash: 0.48 }, maxRate: 7, float: 0.04,
+  springs: [
+    { bones: ["antennaL1", "antennaL2", "antennaL3"], stiffness: [0.22, 0.14, 0.1], gravity: [0.04, 0.08, 0.15] },
+    { bones: ["antennaR1", "antennaR2", "antennaR3"], stiffness: [0.22, 0.14, 0.1], gravity: [0.04, 0.08, 0.15] },
+  ], slot: 6, shadow: 0.32, foot: 0.18,
+  chain: true, bodyRadius: 0.1, glow: { size: 0.06, idle: 3, moving: 10 } } });
+pet.pos.set(hero.pos.x - 0.8, 0, hero.pos.z - 0.6);
+
+// The other two life stages of the Lantern Serpent roam the lake shore on their own: the 2.5 m teen and the 6 m elder
+// with its old sea-glass lanterns. Only the adult wears a saddle, so these two can't be ridden; `note` is what
+// clicking one says. Their stride speeds scale with length from the adult's (5 m: Swim 2.2, Dash 3.4 m/s).
+const serpentSprings = (stiff) => ["L", "R"].map((side) => ({ bones: [1, 2, 3].map((k) => `antenna${side}${k}`),
+  stiffness: stiff, gravity: [0.05, 0.12, 0.3] }));
+const teen = Object.assign(makeMount(), { key: "teen", label: "Young Lantern Serpent", cfg: {
+  url: "../models/serpent/generated/serpent-teen.glb", walk: "Swim", fast: "Dash", fastAt: 1.4, clipSpeed: { Swim: 1.1, Dash: 1.7 },
+  stroll: 0.8, float: 0.28, springs: serpentSprings([0.22, 0.13, 0.09]), slot: 7, shadow: 0.7, foot: 0.32,
+  chain: true, bodyRadius: 0.21, glow: { size: 0.1, idle: 4, moving: 18 },
+  note: "A young Lantern Serpent. It's still too small to carry a rider." } });
+const elder = Object.assign(makeMount(), { key: "elder", label: "Elder Lantern Serpent", cfg: {
+  url: "../models/serpent/generated/serpent-elder.glb", walk: "Swim", fast: "Dash", fastAt: 3.3, clipSpeed: { Swim: 2.64, Dash: 4.08 },
+  stroll: 0.7, float: 0.66, springs: serpentSprings([0.18, 0.11, 0.07]), slot: 8, shadow: 1.5, foot: 0.7,
+  chain: true, bodyRadius: 0.5, glow: { size: 0.16, idle: 5, moving: 22 },
+  note: "The Elder Lantern Serpent. It's grown too old to carry a rider, but it still guards the lake." } });
+const wild = [teen, elder];
+teen.pos.copy(freeSpot(16.5, 9.5));
+teen.heading = -2.4;
+elder.pos.copy(freeSpot(0.5, 14.5));
+elder.heading = 2.1;
+for (const M of [...mounts, ...wild]) M.home.copy(M.pos);
+Object.assign(hero, { riding: false, mounting: null, mountFrom: null, wantsMount: false, mount: null, lift: 0, fetch: null });
+const SEAT = new THREE.Vector3(0, 0.88, -0.03); // hero's root on the stand-in horse's back, in its body space
+const tmpV = new THREE.Vector3();
+// Height of a mount's origin: on the ground, or for a swimmer, floating once the water is deep enough.
+const mountY = (H) => H.cfg.float === undefined ? groundHeight(H.pos.x, H.pos.z)
+  : Math.max(groundHeight(H.pos.x, H.pos.z), waterLevel(uniforms.uTime.value) - H.cfg.float);
+
+// ---------- the game models (art/models/.../*.glb); the horse's stand-in is replaced when its model loads
+
+// AgX mutes strong colours (the yellow crest went beige); give the models the push the grass and trees get.
+function boostSaturation(material) {
+  material.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace("#include <map_fragment>", `#include <map_fragment>
+      diffuseColor.rgb = max(mix(vec3(dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114))), diffuseColor.rgb, 1.3), 0.0);`);
+  };
+  material.needsUpdate = true;
+}
+
+for (const M of [...mounts, pet, ...wild]) {
+  new GLTFLoader().load(M.cfg.url, (gltf) => {
+    const model = gltf.scene;
+    model.traverse((o) => {
+      if (!o.isMesh) return;
+      o.frustumCulled = false;
+      boostSaturation(o.material);
+    });
+    model.updateMatrixWorld(true);
+    M.halfLength = new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3()).z / 2;   // models face +Z
+    if (M.body) {
+      M.body.visible = false;
+      M.body.traverse((o) => { o.raycast = () => {}; });   // clicks should hit the real model
+    }
+    M.root.add(model);
+    const mixer = new THREE.AnimationMixer(model);
+    const clips = Object.fromEntries(gltf.animations.map((c) => [c.name, mixer.clipAction(c)]));
+    clips.Idle?.play();
+    M.root.position.set(M.pos.x, mountY(M), M.pos.z);
+    M.root.rotation.y = M.heading;
+    M.root.updateMatrixWorld(true);
+    // The rider sits on the saddle and rides a body bone, so they rock and bob with the gait.
+    const seatBone = M.cfg.seatBone ? model.getObjectByName(M.cfg.seatBone) : null;
+    const boneZ = seatBone ? seatBone.getWorldPosition(new THREE.Vector3()).applyMatrix4(M.root.matrixWorld.clone().invert()).z : 0;
+    const seatWorld = M.root.localToWorld(new THREE.Vector3(0, M.cfg.seatHeight, boneZ));
+    const seatIn = seatBone ? seatBone.worldToLocal(seatWorld.clone()) : null;
+    Object.assign(M, { model, mixer, clips, clip: "Idle", seatBone, seatIn, springs: makeSprings(model, M.cfg.springs) });
+    if (M.cfg.chain) {
+      // The body's bones from head to tail, and the two lanterns, for the travel effects.
+      const named = (re) => { const out = []; model.traverse((o) => { if (o.isBone && re.test(o.name)) out.push(o); }); return out; };
+      const num = (b) => parseInt(b.name.replace(/\D/g, ""), 10);
+      M.chain = [...named(/^head$/), ...named(/^neck\d+$/).sort((a, b) => num(b) - num(a)), ...named(/^spine$/),
+                 ...named(/^tail\d+$/).sort((a, b) => num(a) - num(b))];
+      M.lanterns = named(/^antenna[LR]3$/);
+    }
+  }, undefined, (err) => console.error(`${M.cfg.url} did not load`, err));
+}
+
+// Crossfades to the clip that fits what the mount is doing, and matches leg speed to ground speed.
+function driveModel(H, dt, moving) {
+  const name = moving ? (H.vel > H.cfg.fastAt ? H.cfg.fast : H.cfg.walk ?? "Walk") : (H.grazing && H.clips.Graze ? "Graze" : "Idle");
+  if (name !== H.clip && H.clips[name]) {
+    H.clips[name].reset().fadeIn(0.3).play();
+    H.clips[H.clip]?.fadeOut(0.3);
+    H.clip = name;
+  }
+  const base = H.cfg.clipSpeed[name];
+  if (base) H.clips[name].timeScale = THREE.MathUtils.clamp(H.vel / base, 0.5, H.cfg.maxRate ?? 1.6);
+  // The mixer only writes bones whose animated value changed; undo last frame's spring bend first.
+  if (H.springs) for (const L of H.springs.links) L.bone.quaternion.copy(L.anim);
+  H.mixer.update(dt);
+}
+
+// Spring physics for tails and feathers: each bone's tip keeps momentum, is pulled back toward the animated pose
+// and sags. chains: bone-name lists (root first) or { bones, stiffness, gravity, tipLength } per chain.
+function makeSprings(root, chains) {
+  const links = [];
+  for (const chain of chains) {
+    const spec = Array.isArray(chain) ? { bones: chain } : chain;
+    const bones = spec.bones.map((n) => root.getObjectByName(n)).filter(Boolean);
+    // The tip is where the child starts; bones point along their local +Y, so the last one reuses the previous
+    // length (or tipLength) along +Y.
+    bones.forEach((bone, i) => {
+      const local = bones[i + 1] ? bones[i + 1].position.clone()
+        : new THREE.Vector3(0, spec.tipLength ?? (i > 0 ? links[links.length - 1].length : bone.position.length()), 0);
+      links.push({ bone, local, length: local.length(), tip: new THREE.Vector3(), prev: new THREE.Vector3(), anim: bone.quaternion.clone(),
+                   stiffness: spec.stiffness?.[i] ?? [0.16, 0.1, 0.07][i] ?? 0.07, drag: 0.12,
+                   gravity: spec.gravity?.[i] ?? [0.15, 0.25, 0.35][i] ?? 0.35 });
+    });
+  }
+  return links.length ? { links, reset: true } : null;
+}
+const _th = new THREE.Vector3(), _tt = new THREE.Vector3(), _tv = new THREE.Vector3(), _tq = new THREE.Quaternion(), _tr = new THREE.Quaternion();
+const TAIL_GRAVITY = new THREE.Vector3(0, -9.8, 0);
+function stepSprings(springs, dt) {
+  if (!springs) return;
+  const k = Math.min(dt * 60, 2);
+  for (const L of springs.links) {
+    L.anim.copy(L.bone.quaternion);
+    L.bone.updateMatrixWorld(true);
+    L.bone.getWorldPosition(_th);
+    _tt.copy(L.local).applyMatrix4(L.bone.matrixWorld);
+    if (springs.reset) { L.tip.copy(_tt); L.prev.copy(_tt); continue; }
+    _tv.subVectors(L.tip, L.prev).multiplyScalar(1 - L.drag);
+    L.prev.copy(L.tip);
+    L.tip.add(_tv).addScaledVector(_tt.sub(L.tip), L.stiffness * k).addScaledVector(TAIL_GRAVITY, L.gravity * dt * dt * k);
+    L.tip.sub(_th).setLength(L.length).add(_th);
+    L.bone.getWorldQuaternion(_tq).invert();
+    _tv.subVectors(L.tip, _th).applyQuaternion(_tq).normalize();
+    L.bone.quaternion.multiply(_tr.setFromUnitVectors(_tt.copy(L.local).normalize(), _tv));
+    L.bone.updateMatrixWorld(true);
+  }
+  springs.reset = false;
+}
+
+function mountSide(M) {
+  // A spot beside the mount's left flank.
+  const c = Math.cos(M.heading), s = Math.sin(M.heading);
+  return new THREE.Vector3(M.pos.x + c * M.cfg.side, 0, M.pos.z - s * M.cfg.side);
+}
+function pickMountTarget(M) {
+  for (let i = 0; i < 20; i++) {
+    const a = Math.random() * Math.PI * 2, r = 1.5 + Math.random() * 4;
+    const x = clampField(M.home.x + Math.cos(a) * r), z = clampField(M.home.z + Math.sin(a) * r);
+    if (!blocked(x, z, 0.8) && groundHeight(x, z) > -0.05) return new THREE.Vector3(x, 0, z);
+  }
+  return null;
+}
+
+function stepMount(H, dt, now) {
+  const mine = hero.mount === H, ridden = mine && hero.riding;
+  const waiting = mine && (hero.wantsMount || hero.mounting !== null);
+  if (waiting) H.target = null;
+  if (!ridden && !waiting && !H.target) {
+    H.idle += dt;
+    if (H.idle > H.wait) { H.target = pickMountTarget(H); H.wait = 4 + Math.random() * 6; H.idle = 0; }
+  }
+  // Speed builds up and eases off; travel() also slows the mount in water.
+  const want = H.target ? (ridden ? H.cfg.rideSpeed : H.cfg.stroll) : 0;
+  H.vel += (want - H.vel) * Math.min(1, dt * (want > H.vel ? 2.5 : 4));
+  let moving = false;
+  if (H.target) moving = travel(H, dt, Math.max(H.vel, 0.4), ridden ? H.cfg.wade : -0.15, H.cfg.float !== undefined);
+  const wading = waterLevel(uniforms.uTime.value) - groundHeight(H.pos.x, H.pos.z) > 0.01;
+
+  // Graze now and then while standing alone; head up when moving or ridden.
+  if (!moving && !ridden && !waiting) {
+    H.grazeT -= dt;
+    if (H.grazeT <= 0) { H.grazing = !H.grazing; H.grazeT = H.grazing ? 3 + Math.random() * 4 : 2 + Math.random() * 3; }
+  } else H.grazing = false;
+  const amp = Math.min(1, H.vel / 0.9);
+  if (H.model) driveModel(H, dt, moving);
+  else if (H.body) animatePlaceholder(H, dt, now, amp);
+
+  H.root.position.set(H.pos.x, mountY(H), H.pos.z);
+  H.root.rotation.y = H.heading;
+  if (H.model) { H.root.updateMatrixWorld(true); stepSprings(H.springs, dt); }
+  stampTrample(H.pos.x, H.pos.z, 0.55 + 0.35 * amp);
+  travelFx(H, dt, moving ? H.vel : 0, 1);
+  const slot = H.cfg.slot;
+  uniforms.uWalkers.value[slot].set(H.pos.x + shadowOffset.x * 1.6, H.pos.z + shadowOffset.y * 1.6, H.model || H.body ? H.cfg.shadow : 0, 0);
+  uniforms.uFeet.value[slot].set(H.pos.x, H.pos.z, wading ? 1 : 0, H.cfg.foot);
+  if (wading && !reduced) {
+    H.splash -= dt;
+    if (H.splash <= 0) { addRipple(H.pos.x, H.pos.z, amp > 0.3 ? 1.4 : 0.6); H.splash = amp > 0.3 ? 0.18 : 1.2; }
+  }
+}
+
+// The pet keeps a spot a little behind and to the right of its leader (the hero, or the mount being ridden),
+// swims there when it falls behind, and turns to watch the hero while it waits.
+function stepPet(dt) {
+  const P = pet;
+  if (!P.model) return;
+  const leader = hero.riding ? hero.mount : hero;
+  const back = hero.riding ? (leader.halfLength ?? 1) + 0.6 : 0.9;
+  const s = Math.sin(leader.heading), c = Math.cos(leader.heading);
+  const spot = new THREE.Vector3(clampField(leader.pos.x - s * back - c * 0.45), 0, clampField(leader.pos.z - c * back + s * 0.45));
+  const gap = Math.hypot(spot.x - P.pos.x, spot.z - P.pos.z);
+  if (gap > 0.25) P.target = spot;
+  const want = P.target ? Math.min(6.5, 0.6 + gap * 2.2) : 0;
+  P.vel += (want - P.vel) * Math.min(1, dt * 4);
+  let moving = false;
+  if (P.target) moving = travel(P, dt, Math.max(P.vel, 0.3), -99, true);
+  if (!moving) {
+    P.target = null;
+    P.heading += angleTo(Math.atan2(hero.pos.x - P.pos.x, hero.pos.z - P.pos.z), P.heading) * Math.min(1, dt * 3);
+  }
+  driveModel(P, dt, moving);
+  P.root.position.set(P.pos.x, mountY(P), P.pos.z);
+  P.root.rotation.y = P.heading;
+  P.root.updateMatrixWorld(true);
+  stepSprings(P.springs, dt);
+  travelFx(P, dt, moving ? P.vel : 0, 0.35);
+  const wading = waterLevel(uniforms.uTime.value) - groundHeight(P.pos.x, P.pos.z) > 0.01;
+  uniforms.uWalkers.value[P.cfg.slot].set(P.pos.x + shadowOffset.x * 0.6, P.pos.z + shadowOffset.y * 0.6, P.cfg.shadow, 0);
+  uniforms.uFeet.value[P.cfg.slot].set(P.pos.x, P.pos.z, wading ? 1 : 0, P.cfg.foot);
+  if (wading && moving && !reduced) {
+    P.splash -= dt;
+    if (P.splash <= 0) { addRipple(P.pos.x, P.pos.z, 0.5); P.splash = 0.35; }
+  }
+}
+
+// ---------- travel effects: what anything moving kicks up from the ground it crosses
+// Grass: blade bits and pollen. Water: splash droplets and a V of ripples trailing behind. Path and sand: dust.
+// Long bodies (the serpents) also press the grass and churn the water along their whole length, and the lantern
+// serpents shed glowing motes. Particles live in two pooled point clouds: plain and glowing (additive).
+const FX_MAX = 1200;
+function makeFxLayer(additive) {
+  const g = new THREE.BufferGeometry();
+  const pos = new Float32Array(FX_MAX * 3), col = new Float32Array(FX_MAX * 4), size = new Float32Array(FX_MAX), spin = new Float32Array(FX_MAX * 2);
+  g.setAttribute("position", new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage));
+  g.setAttribute("tint", new THREE.BufferAttribute(col, 4).setUsage(THREE.DynamicDrawUsage));
+  g.setAttribute("size", new THREE.BufferAttribute(size, 1).setUsage(THREE.DynamicDrawUsage));
+  g.setAttribute("spin", new THREE.BufferAttribute(spin, 2).setUsage(THREE.DynamicDrawUsage));   // angle, shape (0 round, 1 leaf)
+  const material = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
+    uniforms: { uViewH: { value: renderer.domElement.height } },
+    vertexShader: /* glsl */ `
+      attribute vec4 tint; attribute float size; attribute vec2 spin;
+      uniform float uViewH;
+      varying vec4 vTint; varying vec2 vSpin;
+      void main() {
+        vTint = tint; vSpin = spin;
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = size * projectionMatrix[1][1] * uViewH * 0.5 / -mv.z;   // size in metres
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: /* glsl */ `
+      varying vec4 vTint; varying vec2 vSpin;
+      void main() {
+        vec2 q = gl_PointCoord - 0.5;
+        float c = cos(vSpin.x), s = sin(vSpin.x);
+        q = mat2(c, -s, s, c) * q;
+        float d = vSpin.y > 0.5 ? length(q * vec2(1.0, 2.6)) : length(q);   // leaves and chips are thin ellipses
+        if (d > 0.5) discard;
+        gl_FragColor = vec4(vTint.rgb, vTint.a * smoothstep(0.5, 0.12, d));
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+  });
+  const points = new THREE.Points(g, material);
+  points.frustumCulled = false;
+  scene.add(points);
+  return { g, pos, col, size, spin, material, list: [] };
+}
+const fxPlain = makeFxLayer(false), fxGlow = makeFxLayer(true);
+addEventListener("resize", () => { fxPlain.material.uniforms.uViewH.value = fxGlow.material.uniforms.uViewH.value = renderer.domElement.height; });
+const FX_COLORS = {
+  blade: ["#d6ee8c", "#e8f5a8", "#c2e47a", "#f0f8c0"].map((c) => new THREE.Color(c)),   // paler than the blade tips, so they read
+  petal: ["#f3a25f", "#ffd9a8", "#fff6ec"].map((c) => new THREE.Color(c)),               // the meadow's orange and white flowers
+  pollen: new THREE.Color("#fff3b0"), dust: new THREE.Color("#c9a77a"), sand: new THREE.Color("#ead9b0"),
+  splash: new THREE.Color("#e9fbff"), glow: new THREE.Color("#5ce1ff"), glowWarm: new THREE.Color("#ffd27a"),
+};
+const _fxV = new THREE.Vector3();
+
+function spawnFx(layer, p) {
+  if (layer.list.length >= FX_MAX) layer.list.shift();
+  layer.list.push(p);
+}
+// What the ground is at (x, z): water, path dirt, sand by the lake, or grass.
+function surfaceAt(x, z) {
+  if (waterLevel(uniforms.uTime.value) - groundHeight(x, z) > 0.01) return "water";
+  if (pathDistance(x, z) < PATH_HALF) return "dirt";
+  if (lakeDistance(x, z) < 1.6) return "sand";
+  return landAt(x, z).grow < 0.35 ? "dirt" : "grass";
+}
+
+// Called by every mover each frame with its ground speed (m/s) and a size factor.
+function travelFx(m, dt, speed, scale) {
+  if (reduced) return;
+  m.fx = m.fx || { acc: 0, wake: 0, glow: 0, body: 0 };
+  const f = m.fx;
+  const fwd = _fxV.set(Math.sin(m.heading), 0, Math.cos(m.heading));
+  const fx = fwd.x, fz = fwd.z;
+  // A point near the ground just behind the mover, where its feet (or belly) leave the ground.
+  const behind = (back, side) => [m.pos.x - fx * back + fz * side, m.pos.z - fz * back - fx * side];
+
+  // Long bodies press the grass and churn the water along their length (the trample map does both).
+  if (m.chain && m.model) {
+    for (let i = 0; i < m.chain.length; i += 2) {
+      const p = m.chain[i].getWorldPosition(_fxV);
+      if (p.y - groundHeight(p.x, p.z) < 0.9 * scale + 0.35) stampTrample(p.x, p.z, m.cfg.bodyRadius * (speed > 0.1 ? 1 : 0.7));
+    }
+  }
+  if (speed > 0.25) {
+    const ground = surfaceAt(m.pos.x, m.pos.z);
+    f.acc += dt * (speed - 0.25) * (ground === "water" ? 26 : ground === "grass" ? 22 : 8) * scale;
+    while (f.acc >= 1) {
+      f.acc -= 1;
+      const [x, z] = behind(0.25 * scale + Math.random() * 0.3 * scale, (Math.random() - 0.5) * 0.6 * scale);
+      const y = groundHeight(x, z), up = 0.8 + Math.random() * (0.6 + speed * 0.25);
+      const kick = 0.4 + speed * 0.15, side = (Math.random() - 0.5) * 1.2;
+      if (ground === "water") {
+        spawnFx(fxPlain, { x, y: Math.max(y, waterLevel(uniforms.uTime.value)) + 0.02, z, vx: -fx * kick + fz * side, vy: up * 2, vz: -fz * kick - fx * side,
+          life: 0, max: 0.6 + Math.random() * 0.35, grav: 9, drag: 0.6, color: FX_COLORS.splash, alpha: 0.95, size: (0.07 + Math.random() * 0.06) * (0.6 + scale * 0.6), grow: 0 });
+      } else if (ground === "grass") {
+        const roll = Math.random(), pollen = roll < 0.15, petal = roll > 0.7;
+        spawnFx(fxPlain, pollen
+          ? { x, y: y + 0.5 + Math.random() * 0.3, z, vx: (Math.random() - 0.5) * 0.4, vy: 0.15 + Math.random() * 0.2, vz: (Math.random() - 0.5) * 0.4,
+              life: 0, max: 1.6 + Math.random() * 1.2, grav: -0.05, drag: 0.8, color: FX_COLORS.pollen, alpha: 0.9, size: 0.045, grow: 0, flutter: 1.5 }
+          // Blade bits pop out above the tips (the grass is 0.24-0.54 m tall) and flutter down.
+          : { x, y: y + 0.45, z, vx: -fx * kick + fz * side, vy: up * 1.2, vz: -fz * kick - fx * side,
+              life: 0, max: 0.9 + Math.random() * 0.5, grav: petal ? 2.5 : 4, drag: 1.3, alpha: 1, size: 0.1 * (0.7 + scale * 0.4), grow: 0, flutter: petal ? 4.5 : 3,
+              color: petal ? FX_COLORS.petal[(Math.random() * 3) | 0] : FX_COLORS.blade[(Math.random() * 4) | 0],
+              shape: 1, rot: Math.random() * 6, spinRate: (Math.random() - 0.5) * 12 });
+      } else {
+        spawnFx(fxPlain, { x, y: y + 0.08, z, vx: -fx * kick * 0.4 + fz * side * 0.3, vy: 0.3 + Math.random() * 0.3, vz: -fz * kick * 0.4 - fx * side * 0.3,
+          life: 0, max: 0.9 + Math.random() * 0.5, grav: -0.1, drag: 1.8, color: ground === "sand" ? FX_COLORS.sand : FX_COLORS.dust, alpha: 0.35, size: 0.18 * scale + 0.1, grow: 0.5 });
+      }
+    }
+    // A V of ripples trailing behind anything moving through water (a long body ripples along its length too).
+    if (ground === "water") {
+      f.wake -= dt;
+      if (f.wake <= 0) {
+        f.wake = Math.max(0.07, 0.22 - speed * 0.03);
+        for (const sideSign of [-1, 1]) {
+          const [x, z] = behind(0.35 * scale, sideSign * 0.3 * scale);
+          addRipple(x, z, 0.5 + Math.min(0.6, speed * 0.12));
+        }
+        if (m.chain && m.model) {
+          const p = m.chain[2 + ((Math.random() * (m.chain.length - 2)) | 0)].getWorldPosition(_fxV);
+          if (surfaceAt(p.x, p.z) === "water") addRipple(p.x, p.z, 0.6);
+        }
+      }
+    }
+  }
+  // Lantern serpents shed glowing motes from the body and the lanterns, more as they swim.
+  const glow = m.cfg && m.cfg.glow;
+  if (glow && m.model && m.chain.length) {
+    f.glow += dt * (speed > 0.25 ? glow.moving : glow.idle);
+    while (f.glow >= 1) {
+      f.glow -= 1;
+      const fromLantern = m.lanterns.length && Math.random() < 0.3;
+      const src = fromLantern ? m.lanterns[(Math.random() * m.lanterns.length) | 0] : m.chain[(Math.random() * m.chain.length) | 0];
+      const p = src.getWorldPosition(_fxV);
+      const r = m.cfg.bodyRadius * 0.8;
+      spawnFx(fxGlow, { x: p.x + (Math.random() - 0.5) * r, y: p.y + (Math.random() - 0.3) * r, z: p.z + (Math.random() - 0.5) * r,
+        vx: (Math.random() - 0.5) * 0.15, vy: 0.08 + Math.random() * 0.18, vz: (Math.random() - 0.5) * 0.15,
+        life: 0, max: 1.4 + Math.random() * 1.4, grav: 0, drag: 0.4, color: fromLantern ? FX_COLORS.glowWarm : FX_COLORS.glow,
+        alpha: 0.9, size: glow.size * (0.6 + Math.random() * 0.8), grow: 0, flutter: 0.6, twinkle: Math.random() * 6 });
+    }
+  }
+}
+
+// Moves, fades and draws every particle.
+function stepFx(dt) {
+  const t = uniforms.uTime.value;
+  for (const layer of [fxPlain, fxGlow]) {
+    let n = 0;
+    const keep = [];
+    for (const p of layer.list) {
+      p.life += dt;
+      if (p.life >= p.max) continue;
+      const damp = Math.exp(-p.drag * dt);
+      p.vx *= damp; p.vz *= damp; p.vy = p.vy * damp - p.grav * dt;
+      if (p.flutter) { p.vx += Math.sin(t * 5 + p.max * 9) * p.flutter * dt; p.vz += Math.cos(t * 4 + p.max * 7) * p.flutter * dt; }
+      if (p.wind) { const wd = uniforms.uWindDir.value, ws = uniforms.uWind.value * 1.4; p.vx += wd.x * ws * dt; p.vz += wd.y * ws * dt; }
+      if (p.spinRate) p.rot += p.spinRate * dt;
+      p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+      const floor = Math.max(groundHeight(p.x, p.z), waterLevel(t)) + 0.01;
+      if (p.y < floor) { p.y = floor; p.vy = 0; p.vx *= 0.5; p.vz *= 0.5; }
+      keep.push(p);
+      const k = p.life / p.max, fade = Math.min(1, (1 - k) * 3) * Math.min(1, p.life * 10);
+      const tw = p.twinkle === undefined ? 1 : 0.6 + 0.4 * Math.sin(t * 7 + p.twinkle);
+      layer.pos[n * 3] = p.x; layer.pos[n * 3 + 1] = p.y; layer.pos[n * 3 + 2] = p.z;
+      layer.col[n * 4] = p.color.r; layer.col[n * 4 + 1] = p.color.g; layer.col[n * 4 + 2] = p.color.b; layer.col[n * 4 + 3] = p.alpha * fade * tw;
+      layer.size[n] = p.size * (1 + p.grow * k);
+      layer.spin[n * 2] = p.rot || 0; layer.spin[n * 2 + 1] = p.shape || 0;
+      n++;
+    }
+    layer.list = keep;
+    layer.g.setDrawRange(0, n);
+    for (const name of ["position", "tint", "size", "spin"]) layer.g.attributes[name].needsUpdate = true;
+  }
+}
+
+// ---------- choppable trees: oaks, birches, tiered trees and silk trees
+// Each tree is its own object (the stump, then everything above it), so it can shake, fall and regrow. Click a tree to
+// swing at it: every click is one swing, and every hit has an impact frame (hit-stop, speed lines, flash, camera
+// shake). The last hit fells it, and its trunk breaks into logs that lie where it fell until the hero picks them up.
+// Birds perch in the canopies and fly off when you start chopping, leaves drift down (more in wind), and a tree
+// rustles when someone brushes past. Every tree is built from its species and a seed, so the same seed always grows
+// the same tree.
+
+// Per species: hits to fell it, shovel digs to get its stump out, logs it leaves and wood per log, log length (m), the angle it comes to rest at
+// (radians from upright: wide crowns meet the ground sooner), the room it needs (m), its leaf palettes, and the size
+// of the leaves it sheds.
+const TREES = {
+  oak: { hits: 6, dig: 4, logs: 2, wood: 3, logLen: 1.7, land: 1.22, room: 3.0, palettes: ["ember", "ember", "amber"], leafFx: 0.2 },
+  tiered: { hits: 4, dig: 3, logs: 1, wood: 3, logLen: 1.6, land: 1.4, room: 2.3, palettes: ["ember", "amber", "maroon"], leafFx: 0.17 },
+  birch: { hits: 3, dig: 2, logs: 1, wood: 2, logLen: 1.6, land: 1.45, room: 2.0, palettes: ["teal", "teal", "teal", "gold"], leafFx: 0.13 },
+  silk: { hits: 5, dig: 3, logs: 1, wood: 3, logLen: 1.0, land: 1.25, room: 2.8, palettes: ["silk"], leafFx: 0.15,
+    puffs: ["#ff5fa6", "#ff79b6", "#ff4f9c"] },
+};
+// What grows in each grove, by weight, and how many choppable trees each grove gets.
+const GROVES = { autumn: { mix: [["oak", 3], ["tiered", 1]], cap: 7 }, birch: { mix: [["birch", 1]], cap: 7 }, silk: { mix: [["silk", 1]], cap: 4 } };
+const WOODLAND = { regrowAfter: 40, regrowTime: 25 };
+const FX_PUFF = ["#ff8cc0", "#ffb3d6", "#fff0f6"].map((c) => new THREE.Color(c));
+const FX_CHIP = ["#ecca95", "#c99a62", "#a8743f"].map((c) => new THREE.Color(c));
+const woodland = { trees: [], logs: [], birds: [], pops: [], wood: 0, clock: 0 };
+let hitStop = 0, camShake = 0;
+const smooth01 = (x) => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); };
+const pickOf = (list) => list[(Math.random() * list.length) | 0];
+
+// A powder-puff flower: fine filaments radiating from the centre with a dot at each tip. Red runs 0 at the white
+// centre to 1 at the pink tips.
+function puffTexture() {
+  const c = document.createElement("canvas");
+  c.width = c.height = 128;
+  const g = c.getContext("2d"), rand = mulberry32(57);
+  g.lineCap = "round";
+  for (let i = 0; i < 150; i++) {
+    const a = rand() * Math.PI * 2, len = 28 + rand() * 32, ex = 64 + Math.cos(a) * len, ey = 64 + Math.sin(a) * len;
+    const grad = g.createLinearGradient(64, 64, ex, ey);
+    grad.addColorStop(0, "#000"); grad.addColorStop(0.5, "#888"); grad.addColorStop(1, "#fff");
+    g.strokeStyle = grad;
+    g.lineWidth = 1.3;
+    g.beginPath(); g.moveTo(64, 64); g.lineTo(ex, ey); g.stroke();
+    g.fillStyle = "#fff";
+    g.beginPath(); g.arc(ex, ey, 1.7, 0, Math.PI * 2); g.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.NoColorSpace;
+  return t;
+}
+// End grain for stumps and logs.
+function ringTexture() {
+  const c = document.createElement("canvas");
+  c.width = c.height = 64;
+  const g = c.getContext("2d");
+  g.fillStyle = "#e4c08a"; g.fillRect(0, 0, 64, 64);
+  g.strokeStyle = "rgba(150,100,55,0.55)";
+  for (let r = 4; r < 30; r += 4.5) { g.lineWidth = 1.2; g.beginPath(); g.arc(32, 32, r, 0, Math.PI * 2); g.stroke(); }
+  g.strokeStyle = "#6f5a4a"; g.lineWidth = 4; g.beginPath(); g.arc(32, 32, 30, 0, Math.PI * 2); g.stroke();
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+const puffMat = new THREE.ShaderMaterial({
+  uniforms: { ...uniforms, uPuff: { value: puffTexture() } },
+  side: THREE.DoubleSide, alphaToCoverage: true,
+  vertexShader: foliageMat.vertexShader,
+  fragmentShader: /* glsl */ `
+    ${COMMON} ${SHADE}
+    uniform sampler2D uPuff;
+    uniform vec3 uSunDir, uHero;
+    uniform float uSeeThrough;
+    varying vec2 vUv; varying vec3 vNormalW, vWorld, vLeaf; varying float vShell, vRnd, vDepth;
+    void main() {
+      vec4 tex = texture2D(uPuff, vUv, -0.5);
+      if (tex.a < 0.2) discard;
+      // Thin out flowers between the camera and the hero, as the leaves do.
+      vec3 seg = uHero + vec3(0.0, 0.6, 0.0) - cameraPosition;
+      float len = length(seg), along = dot(vWorld - cameraPosition, seg / len);
+      if (uSeeThrough > 0.5 && along > 0.0 && along < len - 0.6) {
+        float off = length(vWorld - cameraPosition - seg / len * along);
+        if (hash(floor(gl_FragCoord.xy)) > smoothstep(1.3, 2.8, off)) discard;
+      }
+      float wrap = clamp(dot(vNormalW, uSunDir) * 0.5 + 0.5, 0.0, 1.0);
+      vec3 col = mix(vec3(1.0, 0.9, 0.93), vLeaf, smoothstep(0.08, 0.55, tex.r)) * (0.9 + 0.2 * vRnd);
+      col = max(mix(vec3(dot(col, vec3(0.299, 0.587, 0.114))), col, 1.35), 0.0);   // AgX mutes the pink; push it back
+      gl_FragColor = vec4(light(col, vWorld.xz, mix(0.55, 1.0, wrap), vDepth, 0.0), smoothstep(0.25, 0.6, tex.a));
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+    }`,
+});
+const cutWood = new THREE.MeshLambertMaterial({ map: ringTexture() });
+const hitVolume = new THREE.MeshBasicMaterial({ visible: false });
+
+// Species growers. Each works in the space above the stump (y = 0 at the cut) through the kit: k.trunk(points,
+// radius(d, len), lobes) adds the trunk with its ridged outline, k.limb(points, r0, r1, sides, collar) a limb,
+// k.clump(x, y, z, r, squash, cardSize) leaves. Each returns the tree's scale, trunk and stump size, bark, how far the
+// stump flares, the trunk's outline (`lobes`, see trunkLobes) and its footprint.
+const GROW = {
+  // A short, thick trunk forking low into 3–5 heavy limbs that arch out and up, each splitting once, under a wide dome
+  // of big oak-leaf clumps; buttress roots flare round the stump.
+  oak(k) {
+    const { rand } = k, s = 0.85 + rand() * 0.3, trunkR = 0.34 * s, stumpH = 0.45 * s;
+    const lobes = { n: 5, buttress: 0.75, rise: 0.22, ridge: 0.1, flutes: 13, flute: 0.025 };
+    const fork = V3((rand() - 0.5) * 0.3, (2.1 + rand() * 0.5) * s, (rand() - 0.5) * 0.3);
+    // The trunk narrows a little up to the fork, where it splits: it rounds off in a dome there, and the limbs start
+    // side by side inside it and grow out through the dome.
+    const dome = trunkR * 0.9;
+    k.trunk([V3(0, -0.02, 0), V3(fork.x * 0.3, fork.y * 0.5, fork.z * 0.3), fork, fork.clone().add(V3(fork.x * 0.05, dome, fork.z * 0.05))],
+      forkTaper(trunkR, dome), lobes, stumpH, true);
+    const n = 3 + ((rand() * 3) | 0);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + rand() * 0.8, out = (1.9 + rand() * 0.8) * s, up = (1.7 + rand() * 0.9) * s;
+      const dx = Math.cos(a), dz = Math.sin(a);
+      // Each limb starts inside the trunk below the fork and leaves it with a swollen collar.
+      const p0 = fork.clone().add(V3(dx * trunkR * 0.15, -0.3 * s, dz * trunkR * 0.15)), p1 = fork.clone().add(V3(dx * out * 0.45, up * 0.5, dz * out * 0.45));
+      const p2 = fork.clone().add(V3(dx * out, up, dz * out));
+      k.limb([p0, fork.clone().add(V3(dx * trunkR * 0.45, 0.12 * s, dz * trunkR * 0.45)), p1, p2], trunkR * 0.56, trunkR * 0.18, 14, 0.08);
+      k.clump(p2.x, p2.y + 0.2 * s, p2.z, (1.15 + rand() * 0.35) * s, 0.78, 0.8 * s);
+      const b = a + (rand() < 0.5 ? 1 : -1) * (0.6 + rand() * 0.4);
+      const q2 = p1.clone().add(V3(Math.cos(b) * out * 0.55, up * 0.25 + 0.4 * s, Math.sin(b) * out * 0.55));
+      k.limb([p1.clone().lerp(p0, 0.12), p1.clone().lerp(q2, 0.5).add(V3(0, 0.15 * s, 0)), q2], trunkR * 0.3, trunkR * 0.08, 10, 0.4);
+      k.clump(q2.x, q2.y + 0.15 * s, q2.z, (0.95 + rand() * 0.3) * s, 0.75, 0.75 * s);
+    }
+    k.clump(fork.x, fork.y + 2.3 * s, fork.z, 1.45 * s, 0.72, 0.85 * s);   // fills the top of the dome
+    return { s, trunkR, stumpH, flare: 1.2, bark: BARK.oak, lobes, footR: trunkR * 1.4 };
+  },
+  // A slim white trunk with a slight S, thin branches climbing at 30–45°, and small separate clumps stacked up its top
+  // half with sky between them.
+  birch(k) {
+    const { rand } = k, s = 0.9 + rand() * 0.25, trunkR = 0.13 * s, stumpH = 0.32 * s, H = (5.4 + rand() * 1.2) * s;
+    const w = V3((rand() - 0.5) * 0.5, 0, (rand() - 0.5) * 0.5), top = V3(w.x * 0.4, H, w.z * 0.4);
+    const spine = [V3(0, -0.02, 0), V3(w.x * 0.6, H * 0.3, w.z * 0.6), V3(-w.x * 0.2, H * 0.65, -w.z * 0.2), top];
+    const lobes = { n: 3, buttress: 0.3, rise: 0.12, ridge: 0.02, flutes: 7, flute: 0.01 };
+    k.trunk(spine, (d, len) => trunkR * (1 - 0.75 * d / len), lobes, stumpH);
+    const curve = new THREE.CatmullRomCurve3(spine), n = 5 + ((rand() * 3) | 0);
+    for (let i = 0; i < n; i++) {
+      const f = 0.42 + 0.5 * (i / (n - 1)) + (rand() - 0.5) * 0.05, at = curve.getPointAt(f);
+      const a = i * 2.4 + rand() * 0.6, len = (1.5 - 0.7 * f) * s * (0.8 + rand() * 0.4), rise = (0.7 + rand() * 0.4) * s;
+      const end = at.clone().add(V3(Math.cos(a) * len, rise, Math.sin(a) * len));
+      k.limb([at, at.clone().lerp(end, 0.5).add(V3(0, 0.12 * s, 0)), end], trunkR * (0.45 - 0.2 * f), 0.015, 7, 0.5);
+      k.clump(end.x, end.y + 0.1 * s, end.z, (1.0 - 0.35 * f) * s * (0.85 + rand() * 0.3), 0.62, 0.42 * s);
+    }
+    k.clump(top.x, top.y + 0.2 * s, top.z, 0.6 * s, 0.75, 0.4 * s);
+    return { s, trunkR, stumpH, flare: 1.1, bark: BARK.birch, lobes, footR: trunkR * 1.3 };
+  },
+  // A slim trunk carrying 4–6 flat pads of leaves, alternating sides and shrinking toward the top.
+  tiered(k) {
+    const { rand } = k, s = 0.9 + rand() * 0.25, trunkR = 0.15 * s, stumpH = 0.35 * s, H = (4.8 + rand() * 1.0) * s;
+    const top = V3((rand() - 0.5) * 0.4, H, (rand() - 0.5) * 0.4), spine = [V3(0, -0.02, 0), V3(top.x * 0.2, H * 0.5, top.z * 0.2), top];
+    const lobes = { n: 4, buttress: 0.45, rise: 0.16, ridge: 0.05, flutes: 9, flute: 0.02 };
+    k.trunk(spine, (d, len) => trunkR * (1 - 0.7 * d / len), lobes, stumpH);
+    const curve = new THREE.CatmullRomCurve3(spine), n = 4 + ((rand() * 3) | 0);
+    for (let i = 0; i < n; i++) {
+      const f = 0.38 + 0.62 * (i / (n - 1)), at = curve.getPointAt(f);
+      const a = i * 2.4 + rand() * 0.5, off = i === n - 1 ? 0 : (0.55 - 0.3 * f) * s;
+      const c = at.clone().add(V3(Math.cos(a) * off, 0.1 * s, Math.sin(a) * off));
+      if (off > 0) k.limb([at.clone().add(V3(0, -0.25 * s, 0)), c.clone().add(V3(0, -0.12 * s, 0))], trunkR * 0.45, trunkR * 0.22, 8, 0.4);
+      k.clump(c.x, c.y, c.z, (1.4 - 0.65 * f) * s, 0.45, 0.6 * s);
+    }
+    return { s, trunkR, stumpH, flare: 1.15, bark: BARK.dark, lobes, footR: trunkR * 1.3 };
+  },
+  // Silk tree (Albizia): a short trunk splitting low into arching limbs under a wide, flat-topped canopy of feathery
+  // leaves dotted with pink powder-puff flowers.
+  silk(k) {
+    const { rand } = k, s = 0.95 + rand() * 0.3, trunkR = 0.2 * s, stumpH = 0.36 * s, fork = 0.75 * s;
+    const lobes = { n: 4, buttress: 0.55, rise: 0.2, ridge: 0.08, flutes: 9, flute: 0.02 };
+    const dome = trunkR * 0.9;
+    k.trunk([V3(0, -0.02, 0), V3(0, fork * 0.5, 0), V3(0, fork, 0), V3(0, fork + dome, 0)], forkTaper(trunkR, dome), lobes, stumpH, true);
+    const n = 4 + ((rand() * 2) | 0);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + rand() * 0.6, d = (1.7 + rand() * 0.6) * s, rise = (2.05 + rand() * 0.2) * s;
+      const p0 = V3(Math.cos(a) * trunkR * 0.15, fork - 0.2 * s, Math.sin(a) * trunkR * 0.15), p1 = V3(Math.cos(a) * d * 0.45, fork + rise * 0.55, Math.sin(a) * d * 0.45);
+      const p2 = V3(Math.cos(a) * d, fork + rise, Math.sin(a) * d);
+      k.limb([p0, V3(Math.cos(a) * d * 0.1, fork + rise * 0.1, Math.sin(a) * d * 0.1), p1, p2], trunkR * 0.56, trunkR * 0.26, 12, 0.08);
+      const r = (1.15 + rand() * 0.35) * s;
+      k.clump(p2.x, p2.y + 0.25 * s, p2.z, r, 0.34, 0.56 * s);
+      // A side twig with a smaller clump between this limb and the next.
+      const a2 = a + Math.PI / n, tw = V3(Math.cos(a2) * d * 0.55, fork + rise * 0.85, Math.sin(a2) * d * 0.55);
+      k.limb([p1.clone().lerp(p0, 0.1), tw], trunkR * 0.32, trunkR * 0.18, 8, 0.4);
+      k.clump(tw.x, tw.y + 0.3 * s, tw.z, r * 0.8, 0.34, 0.56 * s);
+    }
+    k.clump(0, fork + 2.25 * s, 0, 1.3 * s, 0.32, 0.56 * s);   // fills the middle of the umbrella
+    return { s, trunkR, stumpH, flare: 1.2, bark: BARK.silk, lobes, footR: trunkR * 1.35 };
+  },
+};
+// A trunk's radius at d metres up a trunk `len` long that splits at the top: it narrows by 15% to the fork, then
+// rounds off over the last `dome` metres.
+const forkTaper = (R, dome) => (d, len) => {
+  const below = len - dome;
+  return d < below ? R * (1 - 0.15 * d / below) : R * 0.85 * Math.sqrt(Math.max(0.02, 1 - ((d - below) / dome) ** 2));
+};
+const LEAVES_OF = { oak: { kind: LEAF.oak, density: 95 }, tiered: { kind: LEAF.oak, density: 175 },
+  birch: { kind: LEAF.birch, density: 220 }, silk: { kind: LEAF.fern, density: 120 } };
+
+// One tree's meshes. Everything above the stump hangs from `upper`, which pivots at the top of the stump.
+function buildTree(kind, seed, palette) {
+  const rand = mulberry32(seed), spec = TREES[kind], pal = PALETTES[palette], leaves = LEAVES_OF[kind];
+  const cards = newCards(), puffs = newCards(), barkGeos = [], sample = [], perches = [], clumps = [];
+  const phase = rand() * Math.PI * 2, kit = {
+    rand,
+    trunk: (points, radius, lobes, stumpH, capEnd = false) => barkGeos.push(limbGeometry(points, 0, 0, 20, { radius, lobe: trunkLobes(lobes, phase), y0: stumpH, capEnd })),
+    limb: (points, r0, r1, radial, collar = 0.3) => barkGeos.push(limbGeometry(points, r0, r1, radial, { collar })),
+    clump: (cx, cy, cz, r, squash, size) => {
+      addClump(cards, rand, cx, cy, cz, r, squash, { pal, kind: leaves.kind, size, density: leaves.density,
+        onCard: (x, y, z) => { if (rand() < 0.04) sample.push(V3(x, y, z)); } });
+      // Pink puffs scattered over the top of a silk tree's clump.
+      if (spec.puffs) {
+        for (let i = 0, np = Math.round(15 * r * r); i < np; i++) {
+          const a = rand() * Math.PI * 2, q = Math.sqrt(rand()), pc = new THREE.Color(spec.puffs[(rand() * spec.puffs.length) | 0]), v = 0.92 + rand() * 0.16;
+          puffs.pos.push(cx + Math.cos(a) * q * r * 0.95, cy + r * squash * (0.45 + 0.55 * (1 - q * q)), cz + Math.sin(a) * q * r * 0.95);
+          puffs.centers.push(cx, cy, cz);
+          puffs.radii.push(r);
+          puffs.colors.push(pc.r * v, pc.g * v, pc.b * v);
+          puffs.info.push(0.3 * size / 0.56 * (0.8 + rand() * 0.5), rand() * Math.PI * 2, rand(), 0);
+          puffs.kinds.push(-1);
+        }
+      }
+      perches.push(V3(cx + (rand() - 0.5) * r * 0.5, cy + r * squash * 0.98, cz + (rand() - 0.5) * r * 0.5));
+      clumps.push([cx, cy, cz, r, squash]);
+    },
+  };
+  const shape = GROW[kind](kit), { s, trunkR, stumpH } = shape, lobe = trunkLobes(shape.lobes, phase);
+  const root = new THREE.Group();
+  const upper = new THREE.Group();
+  upper.position.y = stumpH;
+  root.add(upper);
+  const look = new THREE.Group();
+  look.rotation.y = rand() * Math.PI * 2;
+  upper.add(look);
+  // The stump stands in the tree's space and the trunk in `look`, turned by look.rotation.y, so the stump reads the
+  // outline at the angle the trunk sees, and the two meet without a step at the cut.
+  root.add(new THREE.Mesh(stumpGeometry(trunkR, stumpH, shape.flare, (phi, y) => lobe(phi + look.rotation.y, y), 20, look.rotation.y), [shape.bark, cutWood]));
+  const cut = new THREE.Mesh(capGeometry(flatRing(0.003, 20, (phi) => trunkR * lobe(phi, stumpH)), false), cutWood);   // shows once it falls
+  look.add(cut, new THREE.Mesh(mergeGeometries(barkGeos), shape.bark));
+  const leafMesh = cardMesh(cards, foliageMat), puffMesh = puffs.radii.length ? cardMesh(puffs, puffMat) : null;
+  look.add(leafMesh);
+  if (puffMesh) look.add(puffMesh);
+  // The crown's extent from its clumps; `span` is a little inside the outer edge (shadow, rustling, the click volume).
+  let top = 0, bottom = Infinity, reach = 0;
+  for (const [cx, cy, cz, r, sq] of clumps) {
+    top = Math.max(top, cy + r * sq);
+    bottom = Math.min(bottom, cy - r * sq * 0.55);
+    reach = Math.max(reach, Math.hypot(cx, cz) + r);
+  }
+  const span = reach * 0.8, crownY = stumpH + (top + bottom) / 2, crownHalf = (top - bottom) / 2;
+  // Invisible volumes for clicking: the trunk and the canopy.
+  const trunkTall = stumpH + Math.max(1.2, bottom);
+  const hitTrunk = new THREE.Mesh(new THREE.CylinderGeometry(trunkR + 0.35, trunkR + 0.35, trunkTall, 8), hitVolume);
+  hitTrunk.position.y = trunkTall / 2;
+  const hitCrown = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), hitVolume);
+  hitCrown.scale.set(span, crownHalf, span);
+  hitCrown.position.y = crownY;
+  // Once felled, the stump on its own is what you click to dig it out.
+  const hitStump = new THREE.Mesh(new THREE.CylinderGeometry(shape.footR + 0.3, shape.footR + 0.3, stumpH + 0.35, 8), hitVolume);
+  hitStump.position.y = (stumpH + 0.35) / 2;
+  root.add(hitTrunk, hitCrown, hitStump);
+  return { root, upper, look, leafMesh, puffMesh, s, trunkR, stumpH, footR: shape.footR, barkMat: shape.bark, height: top, crownY, span,
+    sample, perches, hits: [hitTrunk, hitCrown], stumpHit: hitStump, fxLeaf: pal.slice(1), fxPuff: spec.puffs ? FX_PUFF : null };
+}
+
+// Shadow slots after the ones growFoliage used.
+let shadowSlotNext = treeShadowsUsed;
+const claimShadowSlot = () => (shadowSlotNext < uniforms.uTrees.value.length ? shadowSlotNext++ : -1);
+function setTreeShadow(t, on = true) {
+  if (t.shadowSlot < 0) return;
+  const h = t.crownY * t.grow, lift = 0.85 / sunDir.y;
+  uniforms.uTrees.value[t.shadowSlot].set(t.x - sunDir.x * h * lift, t.z - sunDir.z * h * lift, on ? t.span * 1.15 * t.grow : 0, 0);
+}
+function attachParts(t, parts) {
+  Object.assign(t, parts);
+  t.root.position.set(t.x, Math.max(0, groundHeight(t.x, t.z)), t.z);
+  t.root.scale.setScalar(t.grow);
+  for (const h of [...t.hits, t.stumpHit]) h.userData.tree = t;
+  t.perchUsed = new Set();
+  scene.add(t.root);
+}
+function plantTree(x, z, kind, seed) {
+  const spec = TREES[kind];
+  const t = { x, z, kind, spec, palette: spec.palettes[seed % spec.palettes.length], seed, gen: 0, grow: 1, hp: spec.hits,
+    state: "standing", timer: 0, fall: null, shake: { a: 0, v: 0, axis: V3(1, 0, 0) }, rustleAt: -9, driftIn: Math.random() * 3 };
+  attachParts(t, buildTree(kind, seed, t.palette));
+  t.obstacle = { x, z, r: t.footR + 0.05 };   // small, so the hero can stand close enough to swing
+  OBSTACLES.push(t.obstacle);
+  t.shadowSlot = claimShadowSlot();
+  setTreeShadow(t);
+  woodland.trees.push(t);
+  return t;
+}
+// Plant each grove from a jittered grid of spots in shuffled order: off the path, out of the lake, clear of bushes,
+// mounts and each other.
+{
+  const rand = mulberry32(5), spots = [];
+  for (let gx = -19; gx <= 19; gx += 3.5) for (let gz = -19; gz <= 19; gz += 3.5) spots.push([gx + (rand() - 0.5) * 2.5, gz + (rand() - 0.5) * 2.5]);
+  for (let i = spots.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [spots[i], spots[j]] = [spots[j], spots[i]]; }
+  const mountSpots = [[5, 3], [2, 6.5], [13.6, 5.5], ...wild.map((M) => [M.pos.x, M.pos.z])], planted = { autumn: 0, birch: 0, silk: 0 };
+  let seed = 900;
+  for (const [x, z] of spots) {
+    const zone = zoneAt(x, z), grove = GROVES[zone];
+    if (planted[zone] >= grove.cap) continue;
+    let r = rand() * grove.mix.reduce((a, [, w]) => a + w, 0), kind = grove.mix[0][0];
+    for (const [k, w] of grove.mix) if ((r -= w) <= 0) { kind = k; break; }
+    const room = TREES[kind].room;
+    if (pathDistance(x, z) < PATH_HALF + room * 0.7 || lakeDistance(x, z) < room || blocked(x, z, room * 0.7)) continue;
+    if (mountSpots.some(([mx, mz]) => Math.hypot(x - mx, z - mz) < 3.5)) continue;
+    if (woodland.trees.some((o) => Math.hypot(x - o.x, z - o.z) < room + o.spec.room)) continue;
+    plantTree(x, z, kind, seed++);
+    planted[zone]++;
+  }
+}
+function disposeTree(root) {
+  scene.remove(root);
+  root.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
+}
+// What can be clicked: standing and growing trees, and stumps (to dig out).
+const treeHits = () => woodland.trees.flatMap((t) => t.state === "standing" || t.state === "growing" ? t.hits : t.state === "stump" ? [t.stumpHit] : []);
+
+// ---------- the hero's tools and jobs
+// Four tools, picked by the job: the axe fells trees (one click, one swing), the shovel digs out stumps, the sickle
+// cuts grass and bushes, and the rake levels a building plot. hero.task is the job in hand; hero.jobs queues more
+// (clearing and plot work), and the hero works through them nearest first: cutting and digging, then levelling.
+
+function makeTool(parts) {
+  const g = new THREE.Group();
+  for (const [geo, hex, x, y, z, rx = 0, ry = 0, rz = 0] of parts) {
+    const m = new THREE.Mesh(geo, toon(hex));
+    m.position.set(x, y, z);
+    m.rotation.set(rx, ry, rz);
+    g.add(m);
+  }
+  g.position.set(0, -0.2, 0);
+  g.visible = false;
+  hero.armR.add(g);
+  return g;
+}
+const TOOLS = {
+  axe: makeTool([
+    [new THREE.CylinderGeometry(0.02, 0.022, 0.42, 6), "#8a5a34", 0, -0.17, 0],
+    [new THREE.BoxGeometry(0.04, 0.12, 0.15), "#8f98a3", 0, -0.34, -0.05],
+    [new THREE.BoxGeometry(0.046, 0.13, 0.03), "#e9eef2", 0, -0.34, -0.135],   // the blade leads with local -z on the downswing
+  ]),
+  shovel: makeTool([
+    [new THREE.CylinderGeometry(0.017, 0.017, 0.62, 6), "#8a5a34", 0, -0.2, 0],
+    [new THREE.BoxGeometry(0.11, 0.025, 0.025), "#6d4a2c", 0, 0.1, 0],
+    [new THREE.BoxGeometry(0.13, 0.17, 0.018), "#9aa3ad", 0, -0.58, 0],
+  ]),
+  sickle: makeTool([
+    [new THREE.CylinderGeometry(0.02, 0.022, 0.2, 6), "#8a5a34", 0, -0.07, 0],
+    [new THREE.TorusGeometry(0.11, 0.012, 4, 14, Math.PI * 1.1), "#dfe5ea", -0.11, -0.18, 0, 0, 0, -Math.PI * 0.1],
+  ]),
+  rake: makeTool([
+    [new THREE.CylinderGeometry(0.016, 0.016, 0.7, 6), "#8a5a34", 0, -0.22, 0],
+    [new THREE.BoxGeometry(0.26, 0.03, 0.03), "#6d4a2c", 0, -0.58, 0],
+    ...[-0.1, -0.05, 0, 0.05, 0.1].map((x) => [new THREE.BoxGeometry(0.014, 0.012, 0.07), "#9aa3ad", x, -0.59, -0.04]),
+  ]),
+};
+function showTool(key) { for (const [k, g] of Object.entries(TOOLS)) g.visible = k === key; }
+
+// Arm swing angles (radians; negative is forward and up) through one swing, p = 0..1.
+function swingAngle(p) {
+  if (p < 0.45) return -0.55 - 2.35 * smooth01(p / 0.45);              // wind up over the head
+  if (p < 0.62) return -2.9 + 1.45 * Math.pow((p - 0.45) / 0.17, 2);   // fast strike, speeding up, level at chest height
+  return -1.45 + 0.9 * smooth01((p - 0.62) / 0.38);                     // recoil to the ready stance
+}
+function digAngle(p) {
+  if (p < 0.4) return -0.7 - 0.8 * smooth01(p / 0.4);                   // lift the shovel
+  if (p < 0.55) return -1.5 + 1.15 * Math.pow((p - 0.4) / 0.15, 2);     // drive it down into the ground
+  return -0.35 - 0.55 * smooth01((p - 0.55) / 0.45);                    // lever the earth up
+}
+// Each job: its tool, swing length (s) and the moment it strikes (fraction of the swing), how close to stand, its pose
+// (p = -1 between swings), whether it can still be done, and what a strike does.
+const JOB = {
+  chop: { tool: "axe", period: 0.42, hit: 0.62, order: 0, reach: (j) => j.tree.footR + 0.45,
+    pose: (p) => ({ arm: p < 0 ? -0.55 : swingAngle(p), lean: p > 0.45 && p < 0.8 ? 0.24 : 0.07 }),
+    valid: (j) => j.tree.state === "standing", strike: (j) => chopHit(j.tree) },
+  dig: { tool: "shovel", period: 0.6, hit: 0.55, order: 0, reach: (j) => j.tree.footR + 0.5,
+    pose: (p) => ({ arm: p < 0 ? -0.7 : digAngle(p), lean: p > 0.42 && p < 0.7 ? 0.32 : 0.06 }),
+    valid: (j) => j.tree.state === "stump", strike: (j) => digHit(j.tree) },
+  // The sickle sweeps across in front, the body twisting from right to left.
+  cut: { tool: "sickle", period: 0.4, hit: 0.53, order: 0, reach: (j) => (j.bush ? j.bush.r + 0.3 : 0.45),   // just outside a bush
+    pose: (p) => ({ arm: -1.25, armL: -0.35, lean: 0.14, twist: p < 0 ? 0 : p < 0.45 ? 0.85 * smooth01(p / 0.45) : p < 0.6 ? 0.85 - 1.75 * smooth01((p - 0.45) / 0.15) : -0.9 * (1 - smooth01((p - 0.6) / 0.4)) }),
+    valid: () => true, strike: (j) => cutHit(j) },
+  // The rake reaches out, then pulls back toward the hero.
+  level: { tool: "rake", period: 0.55, hit: 0.65, order: 1, reach: () => 0.75,
+    pose: (p) => ({ arm: p < 0 ? -0.7 : p < 0.5 ? -0.7 - 0.6 * smooth01(p / 0.5) : -1.3 + 0.9 * smooth01((p - 0.5) / 0.3), lean: p > 0 && p < 0.55 ? 0.28 : 0.1 }),
+    valid: (j) => { const t = treeOnCell(j.cell.x, j.cell.z); return !t || t.state === "uprooting"; }, strike: (j) => levelHit(j) },
+};
+hero.jobs = [];
+
+let hintTimer = null;
+function flashHint(text) {
+  $("hint").textContent = text;
+  clearTimeout(hintTimer);
+  hintTimer = setTimeout(syncRideButton, 2600);
+}
+// Where to stand to work on (x, z) from `reach` away: on the hero's side if that's dry ground, else round about.
+function standSpot(x, z, reach) {
+  const base = Math.atan2(hero.pos.x - x, hero.pos.z - z);
+  for (let k = 0; k < 12; k++) {
+    const a = base + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 0.5, sx = x + Math.sin(a) * reach, sz = z + Math.cos(a) * reach;
+    if (groundHeight(sx, sz) > -0.3) return V3(sx, 0, sz);
+  }
+  return V3(x + reach, 0, z);
+}
+function startJob(job) {
+  hero.task = { ...job, spot: standSpot(job.at.x, job.at.z, JOB[job.kind].reach(job)), working: false, queued: job.swings ?? 1, swing: -1, rest: 0 };
+  hero.target = hero.task.spot;
+  hero.idle = 0;
+  hero.fetch = null;
+  if (hero.wantsMount) { hero.wantsMount = false; syncRideButton(); }
+  syncJobMarks();
+}
+// Done with the job in hand: on to the nearest queued one (cutting and digging before levelling), or stop.
+function finishJob() {
+  hero.task = null;
+  hero.body.rotation.y = 0;
+  showTool(null);
+  if (hero.jobs.length) {
+    const order = Math.min(...hero.jobs.map((j) => JOB[j.kind].order));
+    let best = -1, bestD = Infinity;
+    hero.jobs.forEach((j, k) => {
+      const d = Math.hypot(j.at.x - hero.pos.x, j.at.z - hero.pos.z);
+      if (JOB[j.kind].order === order && d < bestD) { best = k; bestD = d; }
+    });
+    startJob(hero.jobs.splice(best, 1)[0]);
+  }
+  syncJobMarks();
+}
+function cancelJobs() {
+  hero.jobs = [];
+  if (hero.task) finishJob();
+}
+// Starts on the queue if the hero is free; a tree being chopped finishes first.
+function runJobs() {
+  if (hero.riding || hero.mounting !== null) { hero.jobs = []; syncJobMarks(); flashHint("Get off your mount to work the land."); return; }
+  if (!hero.task) finishJob();
+  else syncJobMarks();
+}
+
+// Each click on a tree is one axe swing (clicks during a swing queue the next); a click on a stump digs it out.
+function clickTree(t) {
+  if (hero.riding || hero.mounting !== null) { flashHint("Get off your mount to chop trees."); return; }
+  if (t.state === "growing") { flashHint("This tree is still growing."); return; }
+  const kind = t.state === "stump" ? "dig" : t.state === "standing" ? "chop" : null;
+  if (!kind) return;
+  if (hero.task && hero.task.tree === t && hero.task.kind === kind) {
+    if (kind === "chop" && hero.task.queued < 2) hero.task.queued++;
+    return;
+  }
+  // Whatever was in hand goes back on the queue, to finish after this.
+  if (hero.task && hero.task.kind !== "chop" && JOB[hero.task.kind].valid(hero.task)) hero.jobs.push({ ...hero.task, swings: hero.task.queued + (hero.task.swing >= 0 ? 1 : 0) });
+  hero.task = null;
+  hero.body.rotation.y = 0;
+  startJob({ kind, tree: t, at: V3(t.x, 0, t.z), swings: kind === "dig" ? t.digHp : 1 });
+}
+
+// Runs inside stepWalker for the hero while it has a job. Returns true when it posed the hero itself.
+function stepJob(i, dt) {
+  const t = hero.task, J = JOB[t.kind];
+  hero.idle = 0;
+  if (t.swing < 0 && (!J.valid(t) || (t.queued <= 0 && t.kind !== "chop"))) { finishJob(); return false; }
+  if (!t.working) {
+    const d = Math.hypot(hero.pos.x - t.spot.x, hero.pos.z - t.spot.z);
+    if (d < 0.12 || (!hero.target && d < 0.9)) { t.working = true; hero.target = null; }
+    else if (!hero.target) { flashHint("Can't reach that spot."); finishJob(); return false; }
+    else { hero.target = t.spot; showTool(J.tool); return false; }
+  }
+  hero.heading += angleTo(Math.atan2(t.at.x - hero.pos.x, t.at.z - hero.pos.z), hero.heading) * Math.min(1, dt * 14);
+  if (t.swing < 0 && t.queued > 0) { t.swing = 0; t.queued--; t.rest = 0; }
+  let p = -1;
+  if (t.swing >= 0) {
+    const before = t.swing / J.period;
+    t.swing += dt;
+    p = Math.min(1, t.swing / J.period);
+    if (before < J.hit && p >= J.hit && J.valid(t)) J.strike(t);
+    if (t.swing >= J.period) t.swing = -1;
+  } else if ((t.rest += dt) > 3) { finishJob(); return false; }   // put the axe away after a pause
+  showTool(J.tool);
+  const pose = J.pose(p);
+  hero.armR.rotation.set(pose.arm, 0, 0.2);
+  hero.armL.rotation.set(pose.armL ?? pose.arm, 0, -0.2);
+  hero.legL.rotation.set(0.25, 0, 0);
+  hero.legR.rotation.set(-0.2, 0, 0);
+  hero.body.rotation.x = pose.lean;
+  hero.body.rotation.y = pose.twist ?? 0;
+  hero.body.position.y = 0;
+  hero.body.scale.y = 1;
+  hero.head.rotation.z = 0;
+  hero.speed = 0;
+  hero.root.position.set(hero.pos.x, groundHeight(hero.pos.x, hero.pos.z), hero.pos.z);
+  hero.root.rotation.y = hero.heading;
+  uniforms.uFeet.value[i].z = 0;
+  uniforms.uWalkers.value[i].set(hero.pos.x + shadowOffset.x, hero.pos.z + shadowOffset.y, 0.5, 0);
+  return true;
+}
+
+// Rings on the ground where queued work waits: white to cut, brown to dig, sand to level.
+const JOB_COLORS = { cut: new THREE.Color("#ffffff"), dig: new THREE.Color("#9a6f48"), level: new THREE.Color("#f0d9a8"), chop: new THREE.Color("#ffffff") };
+const jobMarks = new THREE.InstancedMesh(new THREE.RingGeometry(0.3, 0.38, 24).rotateX(-Math.PI / 2),
+  new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.45, depthTest: false, depthWrite: false }), 512);
+jobMarks.renderOrder = 6;
+jobMarks.frustumCulled = false;
+jobMarks.count = 0;
+scene.add(jobMarks);
+const _m4 = new THREE.Matrix4();
+function syncJobMarks() {
+  const list = hero.task && hero.task.kind !== "chop" ? [hero.task, ...hero.jobs] : hero.jobs;
+  jobMarks.count = Math.min(list.length, 512);
+  for (let k = 0; k < jobMarks.count; k++) {
+    const j = list[k], s = j.bush ? 2 : j.kind === "cut" ? 1.2 : j.kind === "dig" ? 1.5 : 0.8;
+    _m4.makeScale(s, 1, s).setPosition(j.at.x, Math.max(0, groundHeight(j.at.x, j.at.z)) + 0.05, j.at.z);
+    jobMarks.setMatrixAt(k, _m4);
+    jobMarks.setColorAt(k, JOB_COLORS[j.kind]);
+  }
+  jobMarks.instanceMatrix.needsUpdate = true;
+  if (jobMarks.instanceColor) jobMarks.instanceColor.needsUpdate = true;
+}
+
+// ---------- clearing: cut grass and bushes, dig out stumps
+
+const bushAt = (x, z, pad = 0) => bushes.find((b) => !b.gone && Math.hypot(x - b.x, z - b.z) < b.r + pad);
+// Queues a sickle cut at (x, z) unless it's already bare, can't grow grass, or a cut is queued close by. A spot on a
+// bush queues cutting the whole bush.
+function queueCut(x, z) {
+  const queued = hero.task ? [hero.task, ...hero.jobs] : hero.jobs, b = bushAt(x, z, 0.2);
+  if (b) {
+    if (!queued.some((j) => j.bush === b)) hero.jobs.push({ kind: "cut", at: V3(b.x, 0, b.z), bush: b, swings: b.hp });
+    return;
+  }
+  if (!landAt(x, z).fertile || landStats(x - 0.6, z - 0.6, x + 0.6, z + 0.6).grow < 0.15) return;
+  if (queued.some((j) => j.kind === "cut" && !j.bush && Math.hypot(j.at.x - x, j.at.z - z) < 0.75)) return;
+  hero.jobs.push({ kind: "cut", at: V3(x, 0, z) });
+}
+// A sweep of the sickle: the grass in reach falls, and bits of it fly; a bush shakes and sheds leaves until it goes.
+function cutHit(j) {
+  const at = j.at;
+  if (j.bush && !j.bush.gone) {
+    const b = j.bush;
+    b.hp--;
+    b.wob = 1;
+    for (let k = 0; k < 10; k++) driftLeaf(V3(b.x + (Math.random() - 0.5) * 1.6, 0.4 + Math.random() * 0.8, b.z + (Math.random() - 0.5) * 1.6), b.fx, 0.17, 1);
+    if (b.hp <= 0) {
+      for (let k = 0; k < 36; k++) driftLeaf(V3(b.x + (Math.random() - 0.5) * 2, 0.3 + Math.random() * 1, b.z + (Math.random() - 0.5) * 2), b.fx, 0.17, 2);
+      b.gone = true;
+      scene.remove(b.mesh);
+      b.mesh.geometry.dispose();
+      dropObstacle(b.obstacle);
+      if (b.slot >= 0) uniforms.uTrees.value[b.slot].z = 0;
+      clearLand(b.x, b.z, 1.4, 0.25);
+      camShake = Math.max(camShake, 0.05);
+    }
+  } else clearLand(at.x, at.z, 0.9);
+  // Cut blades in the grass's own colours, flung out to the side the sickle swept toward.
+  const side = V3(-Math.cos(hero.heading), 0, Math.sin(hero.heading));
+  for (let k = 0; k < 16; k++) {
+    const a = Math.random() * Math.PI * 2, r = Math.random() * 0.8, px = at.x + Math.cos(a) * r, pz = at.z + Math.sin(a) * r;
+    spawnFx(fxPlain, { x: px, y: 0.15 + Math.random() * 0.25, z: pz, vx: side.x * (1 + Math.random() * 2) + (Math.random() - 0.5), vy: 1 + Math.random() * 1.6,
+      vz: side.z * (1 + Math.random() * 2) + (Math.random() - 0.5), life: 0, max: 0.9 + Math.random() * 0.6, grav: 4, drag: 1.4, alpha: 1,
+      color: colors.tip.clone().lerp(colors.mid, Math.random()), size: 0.09, grow: 0, shape: 1, rot: Math.random() * 6, spinRate: (Math.random() - 0.5) * 14, flutter: 1 });
+  }
+  camShake = Math.max(camShake, 0.015);
+}
+// A spade of earth: clods fly, the stump rocks, and the soil round it is churned; the last one heaves it out.
+const FX_SOIL = ["#5b3a24", "#7a5234", "#9a6f48"].map((c) => new THREE.Color(c));
+function digHit(t) {
+  t.digHp--;
+  t.wob = 1;
+  t.wobAxis = t.wobAxis || V3(Math.random() - 0.5, 0, Math.random() - 0.5).normalize();
+  const dir = V3(hero.pos.x - t.x, 0, hero.pos.z - t.z).normalize();
+  const at = V3(t.x + dir.x * (t.footR + 0.15), Math.max(0, groundHeight(t.x, t.z)) + 0.05, t.z + dir.z * (t.footR + 0.15));
+  for (let k = 0; k < 14; k++) {
+    spawnFx(fxPlain, { x: at.x, y: at.y, z: at.z, vx: dir.x * (0.6 + Math.random() * 1.6) + (Math.random() - 0.5) * 1.4, vy: 1.8 + Math.random() * 2,
+      vz: dir.z * (0.6 + Math.random() * 1.6) + (Math.random() - 0.5) * 1.4, life: 0, max: 0.7 + Math.random() * 0.4, grav: 9, drag: 0.4, alpha: 1,
+      color: pickOf(FX_SOIL), size: 0.08 + Math.random() * 0.05, grow: 0, shape: 0 });
+  }
+  clearLand(t.x, t.z, t.footR + 0.35 + 0.15 * (t.spec.dig - t.digHp), 0.9);
+  camShake = Math.max(camShake, 0.04);
+  hitStop = Math.max(hitStop, 0.035);
+  if (t.digHp <= 0) {
+    t.state = "uprooting";
+    t.timer = 0;
+    t.y0 = t.root.position.y;
+    t.wobAxis = V3(-dir.z, 0, dir.x);   // it tips away from the hero
+    dropObstacle(t.obstacle);
+    clearLand(t.x, t.z, t.footR + 0.9, 1);
+    for (let k = 0; k < 20; k++) {
+      const a = Math.random() * Math.PI * 2;
+      spawnFx(fxPlain, { x: t.x, y: t.y0 + 0.1, z: t.z, vx: Math.cos(a) * (1 + Math.random() * 1.5), vy: 2 + Math.random() * 2.5,
+        vz: Math.sin(a) * (1 + Math.random() * 1.5), life: 0, max: 0.8 + Math.random() * 0.4, grav: 9, drag: 0.4, alpha: 1,
+        color: pickOf(FX_SOIL), size: 0.1 + Math.random() * 0.06, grow: 0, shape: 0 });
+    }
+    camShake = Math.max(camShake, 0.08);
+  }
+}
+
+// ---------- building plots: mark one out, clear it, level it, and it's ready to build on
+// A plot is a square of 1 m cells (1 cell = 1 server cell) on whole metres. Each cell shows what it still needs: red
+// can't be built on (water, beach, path, a pine, another plot), orange has a tree or stump on it, yellow grass or a
+// bush, green is clear and waits for the rake, and levelled cells go pale. Once every cell is levelled the plot is
+// ready to build on, and grass never grows back on it unless the plot is removed.
+const PLOT = { size: 6 };
+const plots = [];
+let activePlot = null;
+const CELL_COLORS = Object.fromEntries(Object.entries({ blocked: "#e5484d", tree: "#f08c2e", brush: "#f5d04a", clear: "#4cc46a", level: "#fff4dc" })
+  .map(([k, c]) => [k, new THREE.Color(c)]));
+const cellGeo = new THREE.PlaneGeometry(0.9, 0.9).rotateX(-Math.PI / 2);
+function makeGrid(opacity) {
+  const m = new THREE.InstancedMesh(cellGeo, new THREE.MeshBasicMaterial({ transparent: true, opacity, depthTest: false, depthWrite: false }), 64);
+  m.renderOrder = 5;
+  m.frustumCulled = false;
+  m.count = 0;
+  scene.add(m);
+  return m;
+}
+// Distance from (px, pz) to the cell [cx, cx + 1] × [cz, cz + 1].
+const cellDist = (cx, cz, px, pz) => Math.hypot(Math.max(cx - px, 0, px - cx - 1), Math.max(cz - pz, 0, pz - cz - 1));
+const inPlot = (P, x, z, pad = 0) => x > P.x0 - pad && x < P.x0 + P.n + pad && z > P.z0 - pad && z < P.z0 + P.n + pad;
+function plotAt(x, z, pad = 0) { return plots.find((P) => inPlot(P, x, z, pad)); }
+const treeOnCell = (cx, cz) => woodland.trees.find((t) => t.state !== "gone" && cellDist(cx, cz, t.x, t.z) < t.footR + 0.1);
+// What a cell of plot `own` (null for one not placed yet) still needs: blocked, tree, brush, clear or level (done).
+function cellState(cx, cz, own) {
+  const x = cx + 0.5, z = cz + 0.5;
+  if (Math.abs(x) > HALF || Math.abs(z) > HALF || pathDistance(x, z) < PATH_HALF + 0.55 || lakeDistance(x, z) < 1.9) return "blocked";
+  if (plots.some((P) => P !== own && inPlot(P, x, z))) return "blocked";
+  if (FIXED.some((o) => cellDist(cx, cz, o.x, o.z) < o.r + 0.3)) return "blocked";
+  if (treeOnCell(cx, cz)) return "tree";
+  if (bushes.some((b) => !b.gone && cellDist(cx, cz, b.x, b.z) < b.r * 0.7)) return "brush";
+  const st = landStats(cx, cz, cx + 1, cz + 1);
+  return st.level > 0.9 ? "level" : st.grow > 0.15 ? "brush" : "clear";
+}
+// Colours `grid` for the n × n plot at (x0, z0) and counts its cells in each state.
+function paintGrid(grid, x0, z0, n, own) {
+  const counts = { blocked: 0, tree: 0, brush: 0, clear: 0, level: 0 };
+  let k = 0;
+  for (let cz = z0; cz < z0 + n; cz++) {
+    for (let cx = x0; cx < x0 + n; cx++, k++) {
+      const st = cellState(cx, cz, own);
+      counts[st]++;
+      grid.setMatrixAt(k, _m4.makeTranslation(cx + 0.5, Math.max(0, groundHeight(cx + 0.5, cz + 0.5)) + 0.04, cz + 0.5));
+      grid.setColorAt(k, CELL_COLORS[st]);
+    }
+  }
+  grid.count = k;
+  grid.instanceMatrix.needsUpdate = true;
+  grid.instanceColor.needsUpdate = true;
+  return counts;
+}
+
+// The ghost: where a plot would go, following the pointer in Plot mode.
+const ghost = makeGrid(0.5);
+let ghostAt = null;
+function moveGhost(p) {
+  const n = PLOT.size, x0 = Math.round(p.x - n / 2), z0 = Math.round(p.z - n / 2);
+  if (ghostAt && ghostAt.x0 === x0 && ghostAt.z0 === z0 && ghostAt.n === n) return;
+  ghostAt = { x0, z0, n };
+  paintGrid(ghost, x0, z0, n, null);
+}
+function hideGhost() { ghost.count = 0; ghostAt = null; }
+
+const stakeGeo = new THREE.CylinderGeometry(0.035, 0.045, 0.8, 6), stakeMat = toon("#c9a06a");
+const ropeMat = new THREE.LineBasicMaterial({ color: "#f3e4c0" });
+function dustAt(x, z, n, spread = 0.5) {
+  for (let k = 0; k < n; k++) {
+    spawnFx(fxPlain, { x: x + (Math.random() - 0.5) * spread, y: Math.max(0, groundHeight(x, z)) + 0.1, z: z + (Math.random() - 0.5) * spread,
+      vx: (Math.random() - 0.5) * 1.2, vy: 0.3 + Math.random() * 0.5, vz: (Math.random() - 0.5) * 1.2, life: 0, max: 1 + Math.random() * 0.5,
+      grav: -0.1, drag: 1.6, alpha: 0.4, color: FX_COLORS.dust, size: 0.3, grow: 0.8 });
+  }
+}
+// Stakes at the corners with a rope round them, if no cell is red.
+function placePlot(x0, z0, n) {
+  const grid = makeGrid(0.42), counts = paintGrid(grid, x0, z0, n, null);
+  if (counts.blocked) {
+    scene.remove(grid);
+    grid.dispose();
+    flashHint("Can't put a plot there: the red cells are water, beach, path, a pine or another plot.");
+    return null;
+  }
+  const P = { x0, z0, n, grid, counts, ready: false, group: new THREE.Group(), sign: null };
+  grid.visible = mode === "plot";
+  const corners = [[x0, z0], [x0 + n, z0], [x0 + n, z0 + n], [x0, z0 + n]];
+  for (const [x, z] of corners) {
+    const stake = new THREE.Mesh(stakeGeo, stakeMat);
+    stake.position.set(x, Math.max(0, groundHeight(x, z)) + 0.3, z);
+    P.group.add(stake);
+    dustAt(x, z, 4, 0.3);
+  }
+  P.group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([...corners, corners[0]].map(([x, z]) => V3(x, Math.max(0, groundHeight(x, z)) + 0.58, z))), ropeMat));
+  scene.add(P.group);
+  plots.push(P);
+  activePlot = P;
+  hideGhost();
+  syncPlotBar();
+  flashHint("Plot staked out. Chop down any trees on it (orange), then press Work on plot: the hero clears, digs and levels the rest.");
+  return P;
+}
+// A wooden sign by the plot that says it's ready.
+function signTexture() {
+  const c = document.createElement("canvas");
+  c.width = 256; c.height = 128;
+  const g = c.getContext("2d");
+  g.fillStyle = "#b88352"; g.fillRect(0, 0, 256, 128);
+  g.strokeStyle = "rgba(90,55,25,0.35)"; g.lineWidth = 2;
+  for (let y = 18; y < 128; y += 22) { g.beginPath(); g.moveTo(0, y); g.lineTo(256, y + 3); g.stroke(); }
+  g.fillStyle = "#3b2414"; g.textAlign = "center"; g.font = "800 38px Nunito Sans, system-ui, sans-serif";
+  g.fillText("READY", 128, 56); g.font = "700 30px Nunito Sans, system-ui, sans-serif"; g.fillText("TO BUILD", 128, 98);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const signFace = new THREE.MeshLambertMaterial({ map: signTexture() }), signWood = toon("#9c6b40");
+function plotReady(P) {
+  P.ready = true;
+  P.grid.count = 0;
+  const x = P.x0 - 0.3, z = P.z0 - 0.3, sign = new THREE.Group();
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 1.1, 6), signWood);
+  post.position.y = 0.55;
+  const board = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.36, 0.04), [signWood, signWood, signWood, signWood, signFace, signFace]);
+  board.position.y = 1.0;
+  sign.add(post, board);
+  sign.position.set(x, Math.max(0, groundHeight(x, z)), z);
+  sign.rotation.y = Math.atan2(camera.position.x - x, camera.position.z - z);   // facing whoever is looking
+  P.group.add(sign);
+  P.sign = sign;
+  for (let k = 0; k <= 4 * P.n; k++) {
+    const f = k / P.n, side = Math.floor(f), u = f - side;
+    const [ex, ez] = [[P.x0 + u * P.n, P.z0], [P.x0 + P.n, P.z0 + u * P.n], [P.x0 + P.n - u * P.n, P.z0 + P.n], [P.x0, P.z0 + P.n - u * P.n]][side % 4];
+    dustAt(ex, ez, 2, 0.4);
+  }
+  const mid = V3(P.x0 + P.n / 2, 0.6, P.z0 + P.n / 2);
+  popText(mid, "Ready to build!");
+  impactFrame(mid, 0.4);
+  camShake = Math.max(camShake, 0.06);
+  flashHint("The plot is levelled and ready to build on. Grass won't grow back on it.");
+}
+function updatePlot(P) {
+  if (P.ready) return;
+  P.counts = paintGrid(P.grid, P.x0, P.z0, P.n, P);
+  if (P.counts.level === P.n * P.n) plotReady(P);
+  if (P === activePlot) syncPlotBar();
+}
+// A pull of the rake: the cell is packed flat and pale, and dust rises.
+function levelHit(j) {
+  const { x, z } = j.cell;
+  levelLand(x, z, x + 1, z + 1);
+  dustAt(x + 0.5, z + 0.5, 6, 0.8);
+  updatePlot(j.plot);
+}
+// Queues everything the hero can do on the plot: dig out stumps, cut grass and bushes, then level every cell.
+// Standing trees are left for you to chop, one swing per click.
+function workPlot(P) {
+  if (!P || P.ready) return;
+  if (hero.riding || hero.mounting !== null) { flashHint("Get off your mount to work the land."); return; }
+  const queued = () => (hero.task ? [hero.task, ...hero.jobs] : hero.jobs), standing = new Set();
+  for (let cz = P.z0; cz < P.z0 + P.n; cz++) {
+    for (let cx = P.x0; cx < P.x0 + P.n; cx++) {
+      const st = cellState(cx, cz, P);
+      if (st === "tree") {
+        const t = treeOnCell(cx, cz);
+        if (t.state !== "stump" && t.state !== "uprooting") { standing.add(t); continue; }
+        if (t.state === "stump" && !queued().some((j) => j.tree === t)) hero.jobs.push({ kind: "dig", tree: t, at: V3(t.x, 0, t.z), swings: t.digHp });
+      }
+      if (st === "brush") queueCut(cx + 0.5, cz + 0.5);
+      if (st !== "level" && !queued().some((j) => j.kind === "level" && j.cell.x === cx && j.cell.z === cz))
+        hero.jobs.push({ kind: "level", at: V3(cx + 0.5, 0, cz + 0.5), cell: { x: cx, z: cz }, plot: P });
+    }
+  }
+  runJobs();
+  if (standing.size) flashHint(`Chop down the ${standing.size === 1 ? "tree" : `${standing.size} trees`} on the plot (orange), then press Work on plot again to dig out the stumps.`);
+}
+// Removing a plot abandons it: the levelled ground stops being kept, and the grass slowly takes it back.
+function removePlot(P) {
+  levelLand(P.x0, P.z0, P.x0 + P.n, P.z0 + P.n, 0);
+  hero.jobs = hero.jobs.filter((j) => j.plot !== P);
+  if (hero.task?.plot === P) finishJob();
+  syncJobMarks();
+  scene.remove(P.group, P.grid);
+  P.grid.dispose();
+  P.group.traverse((o) => { if (o.geometry && o.geometry !== stakeGeo) o.geometry.dispose(); });
+  plots.splice(plots.indexOf(P), 1);
+  activePlot = plots.at(-1) ?? null;
+  syncPlotBar();
+}
+function syncPlotBar() {
+  const P = activePlot;
+  $("plotbar").hidden = !P;
+  if (!P) return;
+  const total = P.n * P.n, c = P.counts;
+  $("plot-text").textContent = P.ready ? `Plot ${P.n}×${P.n} · ready to build`
+    : `Plot ${P.n}×${P.n} · cleared ${c.clear + c.level}/${total} · levelled ${c.level}/${total}`;
+  $("plot-work").hidden = P.ready;
+}
+$("plot-work").addEventListener("click", () => workPlot(activePlot));
+$("plot-remove").addEventListener("click", () => { if (activePlot) removePlot(activePlot); });
+let plotClock = 0;
+// Twice a second, recolour the plots' cells (grass grows back on cells that aren't levelled yet).
+function stepPlots(dt) {
+  if ((plotClock += dt) < 0.5) return;
+  plotClock = 0;
+  for (const P of plots) updatePlot(P);
+}
+
+// ---------- what a click does: Walk (walk, chop, dig, pick up, ride), Clear (mark grass to cut), Plot (place a plot)
+
+const HINTS = {
+  walk: "Click or tap the grass to walk there. Click a tree to swing your axe (one click, one swing); click a stump to dig it out. Pick up logs where they fall, or click a mount to ride it. Drag to orbit, scroll or pinch to zoom.",
+  clear: "Drag over the grass to mark it for cutting, and the hero works through the marks. Bushes take two cuts. Cut grass grows back slowly, from the edges in. Switch to Walk to turn the camera.",
+  plot: "Move over open ground to see where a plot would go: red can't be built on, orange has a tree or stump, yellow needs cutting, green is clear. Click to stake it out.",
+};
+let mode = "walk";
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll("[data-mode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === m)));
+  $("plot-sizes").hidden = m !== "plot";
+  for (const P of plots) P.grid.visible = m === "plot";   // drawn over everything, so only while placing and planning
+  hideGhost();
+  syncRideButton();
+}
+document.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
+document.querySelectorAll("[data-size]").forEach((b) => b.addEventListener("click", () => {
+  PLOT.size = Number(b.dataset.size);
+  document.querySelectorAll("[data-size]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  hideGhost();
+}));
+addEventListener("keydown", (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey || e.target.closest?.("input, textarea")) return;
+  const m = { 1: "walk", 2: "clear", 3: "plot", Escape: "walk" }[e.key];
+  if (m) setMode(m);
+});
+
+// ---------- hits, falling, logs
+
+const treePoint = (t) => t.look.localToWorld(pickOf(t.sample).clone());
+function driftLeaf(p, colors, size, burst = 0) {
+  spawnFx(fxPlain, { x: p.x, y: p.y, z: p.z, vx: (Math.random() - 0.5) * (0.4 + burst), vy: -0.1 - Math.random() * 0.2 + burst * Math.random(),
+    vz: (Math.random() - 0.5) * (0.4 + burst), life: 0, max: 3.5 + Math.random() * 2.5, grav: 0.3, drag: 1.2, alpha: 1,
+    color: pickOf(colors), size, grow: 0, flutter: 1.6, shape: 1, rot: Math.random() * 6, spinRate: (Math.random() - 0.5) * 6, wind: 1 });
+}
+// Leaves in the tree's own colours (and petals from a silk tree) shaken loose from its canopy.
+function burstLeaves(t, n, burst) {
+  for (let k = 0; k < n; k++) {
+    const puff = t.fxPuff && Math.random() < 0.35;
+    driftLeaf(treePoint(t), puff ? t.fxPuff : t.fxLeaf, puff ? 0.12 : t.spec.leafFx, burst);
+  }
+}
+function chopHit(t) {
+  const dir = V3(t.x - hero.pos.x, 0, t.z - hero.pos.z).normalize();
+  const at = V3(t.x - dir.x * t.trunkR, t.root.position.y + t.stumpH + 0.22, t.z - dir.z * t.trunkR);
+  t.hp--;
+  const last = t.hp <= 0;
+  t.shake.axis.set(dir.z, 0, -dir.x);
+  t.shake.v += (0.45 + 0.1 * (t.spec.hits - t.hp)) / Math.sqrt(t.s * t.trunkR / 0.2);   // thick trunks shake less
+  // Wood chips spray back toward the hero, a flash marks the hit, and leaves shake loose.
+  for (let k = 0; k < 10; k++) {
+    const side = (Math.random() - 0.5) * 2.4;
+    spawnFx(fxPlain, { x: at.x, y: at.y, z: at.z, vx: -dir.x * (1.2 + Math.random() * 1.6) + dir.z * side, vy: 1.4 + Math.random() * 2.2,
+      vz: -dir.z * (1.2 + Math.random() * 1.6) - dir.x * side, life: 0, max: 0.6 + Math.random() * 0.4, grav: 9, drag: 0.5, alpha: 1,
+      color: pickOf(FX_CHIP), size: 0.07, grow: 0, shape: 1, rot: Math.random() * 6, spinRate: (Math.random() - 0.5) * 20 });
+  }
+  spawnFx(fxGlow, { x: at.x, y: at.y, z: at.z, vx: 0, vy: 0, vz: 0, life: 0, max: 0.12, grav: 0, drag: 0, alpha: 1,
+    color: new THREE.Color("#eaffd6"), size: last ? 1.1 : 0.7, grow: 0.8 });
+  burstLeaves(t, last ? 14 : 6, 0.8);
+  impactFrame(at, last ? 1 : 0.65);
+  hitStop = Math.max(hitStop, last ? 0.11 : 0.065);
+  camShake = Math.max(camShake, last ? 0.12 : 0.06);
+  scareBirds(t);
+  if (last) {
+    t.state = "falling";
+    t.fall = { axis: V3(dir.z, 0, -dir.x), dir, angle: Math.max(0.04, t.shake.a), vel: 0.35, bounces: 0 };
+    t.obstacle.r = t.footR * 0.9;
+    for (const h of t.hits) h.userData.tree = null;
+  }
+}
+function landTree(t) {
+  const f = t.fall, base = V3(t.x, t.root.position.y + t.stumpH, t.z);
+  for (let k = 0; k < 28; k++) {
+    const along = Math.random() * (t.height + t.span) * 0.9, side = (Math.random() - 0.5) * 1.6;
+    const x = base.x + f.dir.x * along + f.dir.z * side, z = base.z + f.dir.z * along - f.dir.x * side;
+    const wet = surfaceAt(x, z) === "water";
+    spawnFx(fxPlain, { x, y: Math.max(groundHeight(x, z), waterLevel(uniforms.uTime.value)) + 0.1, z,
+      vx: (Math.random() - 0.5) * 1.2, vy: wet ? 2 + Math.random() * 2 : 0.4 + Math.random() * 0.6, vz: (Math.random() - 0.5) * 1.2,
+      life: 0, max: wet ? 0.8 : 1.2 + Math.random() * 0.6, grav: wet ? 9 : -0.1, drag: wet ? 0.6 : 1.6, alpha: wet ? 0.95 : 0.4,
+      color: wet ? FX_COLORS.splash : FX_COLORS.dust, size: wet ? 0.09 : 0.35, grow: wet ? 0 : 0.8 });
+    if (wet && k % 4 === 0) addRipple(x, z, 1.2);
+    if (k % 3 === 0) stampTrample(x, z, 0.7);
+  }
+  burstLeaves(t, 36, 1.5);
+  camShake = Math.max(camShake, 0.16);
+  hitStop = Math.max(hitStop, 0.05);
+  impactFrame(V3(base.x + f.dir.x * t.height * 0.8, base.y, base.z + f.dir.z * t.height * 0.8), 0.5);
+}
+// A log: bark round the side, end grain on both ends, lying along `axis` (u round it, v along it in metres).
+function makeLog(t, axis) {
+  const len = t.spec.logLen * t.s, r = t.trunkR * 0.9;
+  const mesh = new THREE.Mesh(metresUV(new THREE.CylinderGeometry(r, r, len, 14), len), [t.barkMat, cutWood, cutWood]);
+  mesh.quaternion.setFromUnitVectors(V3(0, 1, 0), axis);
+  mesh.rotateY(Math.random() * Math.PI * 2);   // roll it round its own axis
+  scene.add(mesh);
+  return { mesh, r, len, axis: axis.clone(), wood: t.spec.wood, state: "pop", t: 0, vel: V3(0, 0, 0), spin: 0, from: null };
+}
+// The fallen crown bursts into leaves and petals, and the trunk breaks into logs that drop where it lay.
+function breakTree(t) {
+  burstLeaves(t, 50, 2);
+  t.upper.visible = false;
+  setTreeShadow(t, false);
+  t.state = "stump";
+  t.timer = 0;
+  t.digHp = t.spec.dig;
+  const f = t.fall;
+  for (let k = 0; k < t.spec.logs; k++) {
+    const L = makeLog(t, f.dir), along = t.footR + 0.3 + (k + 0.5) * (L.len + 0.25);
+    const x = t.x + f.dir.x * along, z = t.z + f.dir.z * along;
+    L.mesh.position.set(x, Math.max(groundHeight(x, z), waterLevel(uniforms.uTime.value)) + L.r + 0.3, z);
+    L.vel.set((Math.random() - 0.5) * 0.8, 1.6 + Math.random() * 0.8, (Math.random() - 0.5) * 0.8);
+    L.spin = (Math.random() - 0.5) * 7;
+    woodland.logs.push(L);
+  }
+}
+// After a while the stump puffs into a sapling that grows back into a full tree of the same kind, in a new shape.
+function regrowTree(t) {
+  disposeTree(t.root);
+  t.gen++;
+  t.grow = 0.12;
+  t.hp = t.spec.hits;
+  t.state = "growing";
+  t.fall = null;
+  t.shake = { a: 0, v: 0, axis: V3(1, 0, 0) };
+  attachParts(t, buildTree(t.kind, t.seed + 101 * t.gen, t.palette));
+  t.obstacle.r = t.footR + 0.05;
+  setTreeShadow(t);
+  burstLeaves(t, 8, 0.6);
+}
+
+// ---------- picking up logs: walk up to one and press Pick Up (or E), or click it to go and get it
+
+// Metres from (x, z) to a log's axis, along the ground.
+function logDistance(L, p) {
+  const c = L.mesh.position, h = L.len / 2, along = Math.max(-h, Math.min(h, (p.x - c.x) * L.axis.x + (p.z - c.z) * L.axis.z));
+  return Math.hypot(p.x - (c.x + L.axis.x * along), p.z - (c.z + L.axis.z * along));
+}
+const restingLogs = () => woodland.logs.filter((L) => L.state === "rest");
+function nearestLog() {
+  let best = null, bestD = Infinity;
+  for (const L of restingLogs()) {
+    const d = logDistance(L, hero.pos) - L.r;
+    if (d < 1.1 && d < bestD) { best = L; bestD = d; }
+  }
+  return best;
+}
+function pickUp(L) {
+  if (hero.riding || hero.mounting !== null || hero.lift > 0 || L.state !== "rest") return;
+  cancelJobs();
+  const c = L.mesh.position;
+  hero.heading = Math.atan2(c.x - hero.pos.x, c.z - hero.pos.z);
+  hero.target = null;
+  hero.fetch = null;
+  hero.idle = 0;
+  hero.lift = 0.85;
+  Object.assign(L, { state: "lift", t: 0, from: c.clone(), q0: L.mesh.quaternion.clone() });
+}
+function fetchLog(L) {
+  if (hero.riding || hero.mounting !== null) { flashHint("Get off your mount to pick up logs."); return; }
+  cancelJobs();
+  if (hero.wantsMount) { hero.wantsMount = false; syncRideButton(); }
+  // Stand beside the log, on the side the hero is coming from.
+  const c = L.mesh.position, h = L.len / 2, along = Math.max(-h, Math.min(h, (hero.pos.x - c.x) * L.axis.x + (hero.pos.z - c.z) * L.axis.z));
+  const px = c.x + L.axis.x * along, pz = c.z + L.axis.z * along, dx = hero.pos.x - px, dz = hero.pos.z - pz, d = Math.hypot(dx, dz) || 1;
+  hero.fetch = L;
+  hero.target = V3(px + (dx / d) * (L.r + 0.45), 0, pz + (dz / d) * (L.r + 0.45));
+  hero.idle = 0;
+}
+const pickButton = $("pickup");
+pickButton.addEventListener("click", () => { const L = nearestLog(); if (L) pickUp(L); });
+addEventListener("keydown", (e) => {
+  if ((e.key === "e" || e.key === "E") && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) { const L = nearestLog(); if (L) pickUp(L); }
+});
+// Logs pop off the fallen trunk and settle. Picked up, one swings up over the hero's head, is held there a moment,
+// then is stowed away for its wood.
+const _liftQ = new THREE.Quaternion();
+function stepLogs(dt) {
+  if (hero.lift > 0) hero.lift = Math.max(0, hero.lift - dt);
+  if (hero.fetch) {
+    const L = hero.fetch;
+    if (L.state !== "rest") hero.fetch = null;
+    else if (logDistance(L, hero.pos) < L.r + 0.75) pickUp(L);
+    else if (!hero.target) hero.fetch = null;
+  }
+  for (let k = woodland.logs.length - 1; k >= 0; k--) {
+    const L = woodland.logs[k], m = L.mesh;
+    if (L.state === "pop") {
+      L.vel.y -= 9.8 * dt;
+      m.position.addScaledVector(L.vel, dt);
+      m.rotateOnWorldAxis(L.axis, L.spin * dt);
+      const floor = Math.max(groundHeight(m.position.x, m.position.z), waterLevel(uniforms.uTime.value)) + L.r;
+      if (m.position.y < floor) {
+        m.position.y = floor;
+        if (L.vel.y < -1.2) { L.vel.y *= -0.3; L.vel.x *= 0.5; L.vel.z *= 0.5; L.spin *= 0.5; stampTrample(m.position.x, m.position.z, 0.6); }
+        else L.state = "rest";
+      }
+    } else if (L.state === "rest") {
+      // Logs that landed in the lake bob on the water.
+      const wl = waterLevel(uniforms.uTime.value);
+      if (wl > groundHeight(m.position.x, m.position.z)) m.position.y = wl + L.r * 0.2;
+    } else if (L.state === "lift") {
+      L.t += dt;
+      const head = hero.root.position.clone().add(V3(0, 1.38 + L.r, 0));
+      _liftQ.setFromUnitVectors(V3(0, 1, 0), V3(Math.cos(hero.heading), 0, -Math.sin(hero.heading)));   // across the hero's shoulders
+      if (L.t < 0.28) {
+        const u = smooth01(L.t / 0.28);
+        m.position.copy(L.from).lerp(head, u).add(V3(0, Math.sin(u * Math.PI) * 0.35, 0));
+        m.quaternion.copy(L.q0).slerp(_liftQ, u);
+      } else if (L.t < 0.62) {
+        m.position.copy(head).add(V3(0, Math.sin((L.t - 0.28) * 18) * 0.03, 0));
+        m.quaternion.copy(_liftQ);
+      } else {
+        const u = smooth01((L.t - 0.62) / 0.2);
+        m.position.copy(head).lerp(hero.root.position.clone().add(V3(0, 0.6, 0)), u);
+        m.scale.setScalar(1 - 0.85 * u);
+        if (L.t >= 0.82) {
+          scene.remove(m);
+          m.geometry.dispose();
+          woodland.logs.splice(k, 1);
+          woodland.wood += L.wood;
+          syncWood();
+          popText(head, `+${L.wood} wood`);
+        }
+      }
+    }
+  }
+  pickButton.hidden = !(hero.lift <= 0 && !hero.riding && hero.mounting === null && nearestLog());
+}
+
+// ---------- birds: perch in the canopies, fly to another tree when disturbed
+
+const BIRD_LOOKS = [["#4a8fe0", "#ffb36b"], ["#e2553f", "#ffd9c4"], ["#f2c443", "#fff3c4"], ["#7a5a45", "#efd9c0"]];
+function makeBird(body, belly) {
+  const g = new THREE.Group(), add = (geo, hex, x, y, z) => { const m = new THREE.Mesh(geo, toon(hex)); m.position.set(x, y, z); g.add(m); return m; };
+  add(new THREE.SphereGeometry(0.07, 12, 9), body, 0, 0, 0).scale.set(1, 0.85, 1.35);
+  add(new THREE.SphereGeometry(0.055, 10, 8), belly, 0, -0.018, 0.035).scale.set(0.95, 0.8, 1.1);
+  const head = new THREE.Group();
+  head.position.set(0, 0.06, 0.08);
+  g.add(head);
+  const hm = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 9), toon(body));
+  head.add(hm);
+  const beak = new THREE.Mesh(new THREE.ConeGeometry(0.015, 0.045, 6), toon("#f2a33a"));
+  beak.rotation.x = Math.PI / 2;
+  beak.position.set(0, -0.005, 0.06);
+  head.add(beak);
+  for (const sx of [-1, 1]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.009, 6, 5), toon("#1d1d26"));
+    eye.position.set(sx * 0.03, 0.012, 0.035);
+    head.add(eye);
+  }
+  const wing = (sx) => {
+    const pivot = new THREE.Group();
+    pivot.position.set(sx * 0.055, 0.02, 0);
+    const w = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.014, 0.08), toon(body));
+    w.position.x = sx * 0.06;
+    pivot.add(w);
+    g.add(pivot);
+    return pivot;
+  };
+  const wingL = wing(1), wingR = wing(-1);
+  add(new THREE.BoxGeometry(0.05, 0.012, 0.09), body, 0, 0.012, -0.11).rotation.x = -0.35;
+  g.scale.setScalar(2.1);   // bigger than life, so they read from the game camera
+  scene.add(g);
+  return { g, head, wingL, wingR };
+}
+function freePerch(exclude) {
+  const options = [];
+  for (const t of woodland.trees) {
+    if (t === exclude || t.state !== "standing") continue;
+    t.perches.forEach((_, k) => { if (!t.perchUsed.has(k)) options.push([t, k]); });
+  }
+  return options.length ? pickOf(options) : null;
+}
+function perchWorld(t, k) { return t.look.localToWorld(t.perches[k].clone()); }
+function landBird(b, t, k) {
+  b.state = "perched";
+  b.tree = t;
+  b.perch = k;
+  t.perchUsed.add(k);
+  b.next = 1 + Math.random() * 3;
+}
+function flyBird(b, dest) {
+  if (b.tree) b.tree.perchUsed.delete(b.perch);
+  const from = b.g.position.clone();
+  let to;
+  if (dest) to = perchWorld(dest[0], dest[1]);
+  else { const a = Math.random() * Math.PI * 2; to = V3(Math.cos(a) * 40, 9, Math.sin(a) * 40); }   // away over the forest
+  const dist = from.distanceTo(to);
+  b.state = "flying";
+  b.tree = null;
+  b.flight = { from, to, dest, t: 0, dur: Math.max(1.4, dist / 4.5), c1: from.clone().add(V3((Math.random() - 0.5) * 2, 2.6, (Math.random() - 0.5) * 2)),
+    c2: to.clone().add(V3(0, dest ? 1.6 : 0, 0)) };
+}
+function scareBirds(t) {
+  for (const b of woodland.birds) {
+    if (b.state !== "perched" || b.tree !== t) continue;
+    b.state = "startled";
+    b.delay = Math.random() * 0.25;
+  }
+}
+for (let k = 0; k < 10; k++) {
+  const perch = freePerch(null);
+  if (!perch) break;
+  const [body, belly] = BIRD_LOOKS[k % BIRD_LOOKS.length];
+  const b = Object.assign(makeBird(body, belly), { state: "perched", tree: null, perch: 0, next: 0, flap: Math.random() * 6 });
+  landBird(b, perch[0], perch[1]);
+  b.g.position.copy(perchWorld(perch[0], perch[1]));
+  b.g.rotation.y = Math.random() * Math.PI * 2;
+  woodland.birds.push(b);
+}
+const _bp = new THREE.Vector3(), _bq = new THREE.Vector3();
+function bezier(f, t, out) {
+  const u = 1 - t;
+  return out.copy(f.from).multiplyScalar(u * u * u).addScaledVector(f.c1, 3 * u * u * t).addScaledVector(f.c2, 3 * u * t * t).addScaledVector(f.to, t * t * t);
+}
+function stepBirds(dt) {
+  for (const b of woodland.birds) {
+    b.flap += dt;
+    if (b.state === "perched") {
+      // Sit on the swaying canopy: hop now and then, turn the head, peck.
+      b.g.position.copy(perchWorld(b.tree, b.perch));
+      b.next -= dt;
+      if (b.next <= 0) { b.next = 0.8 + Math.random() * 2.5; b.look = (Math.random() - 0.5) * 2; b.hop = 0.25; if (Math.random() < 0.3) b.g.rotation.y += (Math.random() - 0.5) * 2; }
+      if (b.hop > 0) { b.hop -= dt; b.g.position.y += Math.sin((0.25 - b.hop) / 0.25 * Math.PI) * 0.06; }
+      b.head.rotation.y += ((b.look || 0) - b.head.rotation.y) * Math.min(1, dt * 10);
+      b.wingL.rotation.z = 0.15; b.wingR.rotation.z = -0.15;
+    } else if (b.state === "startled") {
+      if ((b.delay -= dt) <= 0) flyBird(b, freePerch(b.tree));
+    } else if (b.state === "flying") {
+      const f = b.flight;
+      f.t = Math.min(1, f.t + dt / f.dur);
+      const e = f.t < 0.5 ? 2 * f.t * f.t : 1 - Math.pow(-2 * f.t + 2, 2) / 2;
+      bezier(f, e, _bp);
+      bezier(f, Math.min(1, e + 0.02), _bq);
+      b.g.position.copy(_bp);
+      if (_bq.distanceToSquared(_bp) > 1e-6) b.g.rotation.y = Math.atan2(_bq.x - _bp.x, _bq.z - _bp.z);
+      const flap = f.t > 0.85 && f.dest ? 0.6 : 1;   // glide in to land
+      b.wingL.rotation.z = Math.sin(b.flap * 26) * 1.1 * flap;
+      b.wingR.rotation.z = -Math.sin(b.flap * 26) * 1.1 * flap;
+      if (f.t >= 1) {
+        if (f.dest && f.dest[0].state === "standing") landBird(b, f.dest[0], f.dest[1]);
+        else { b.state = "away"; b.g.visible = false; b.next = 12 + Math.random() * 18; }
+      }
+    } else if (b.state === "away") {
+      // Come back from beyond the forest once there is a tree to land in.
+      if ((b.next -= dt) <= 0) {
+        const perch = freePerch(null);
+        if (perch) { b.g.visible = true; b.tree = null; flyBird(b, perch); } else b.next = 5;
+      }
+    }
+  }
+}
+
+// ---------- the world step for trees, logs, rustling and drifting leaves
+
+function rustle(t, strength, from) {
+  if (woodland.clock - t.rustleAt < 1.2) return;
+  t.rustleAt = woodland.clock;
+  const dx = t.x - from.x, dz = t.z - from.z, len = Math.hypot(dx, dz) || 1;
+  t.shake.axis.set(dz / len, 0, -dx / len);
+  t.shake.v += 0.1 * strength;
+  burstLeaves(t, Math.round(2 + 3 * strength), 0.3);
+  if (strength > 1.6) scareBirds(t);
+}
+function stepWoodland(dt) {
+  woodland.clock += dt;
+  const wind = uniforms.uWind.value, movers = [];
+  for (const w of walkers) if (!(w === hero && hero.riding)) movers.push([w.pos, w.speed * w.maxSpeed]);
+  for (const M of [...mounts, ...wild]) movers.push([M.pos, M.vel]);
+  movers.push([pet.pos, pet.vel || 0]);
+  for (const b of bushes) {
+    if (b.wob <= 0) continue;
+    b.wob = Math.max(0, b.wob - dt * 3);
+    b.mesh.position.set(Math.sin(b.wob * 25) * 0.07 * b.wob, 0, Math.cos(b.wob * 21) * 0.06 * b.wob);
+  }
+  for (const t of woodland.trees) {
+    if (t.state === "standing" || t.state === "growing") {
+      // A damped spring for the shake after a hit or a brush.
+      t.shake.v += (-70 * t.shake.a - 6 * t.shake.v) * dt;
+      t.shake.a += t.shake.v * dt;
+      t.upper.quaternion.setFromAxisAngle(t.shake.axis, t.shake.a);
+      if (t.state === "growing") {
+        t.grow = Math.min(1, t.grow + dt / WOODLAND.regrowTime);
+        t.root.scale.setScalar(t.grow);
+        setTreeShadow(t);
+        if (t.grow >= 1) t.state = "standing";
+      } else {
+        for (const [p, speed] of movers) {
+          if (speed > 0.6 && Math.hypot(p.x - t.x, p.z - t.z) < t.span * 0.8) rustle(t, speed / 1.5, p);
+        }
+        if ((t.driftIn -= dt) <= 0) {
+          t.driftIn = (0.5 + Math.random()) / (0.25 + 1.8 * wind);
+          burstLeaves(t, 1, 0);
+        }
+      }
+    } else if (t.state === "falling") {
+      // A rod hinged at the stump: it tips slowly, then gathers speed until the crown hits the ground.
+      const f = t.fall, LAND = t.spec.land;
+      f.vel += (3 * 9.8) / (2 * (t.height + 0.5)) * Math.sin(f.angle) * dt;
+      f.angle += f.vel * dt;
+      if (f.angle >= LAND) {
+        f.angle = LAND;
+        if (f.bounces === 0) landTree(t);
+        f.bounces++;
+        if (f.vel > 0.5 && f.bounces < 3) f.vel = -f.vel * 0.2;
+        else { f.vel = 0; t.state = "down"; t.timer = 0; }
+      }
+      t.upper.quaternion.setFromAxisAngle(f.axis, f.angle);
+    } else if (t.state === "down") {
+      if ((t.timer += dt) > 0.7) breakTree(t);
+    } else if (t.state === "stump") {
+      // Stumps on a building plot wait to be dug out instead of growing back.
+      if ((t.timer += dt) > WOODLAND.regrowAfter && !plotAt(t.x, t.z, t.footR)) regrowTree(t);
+      if (t.wob > 0) {
+        t.wob = Math.max(0, t.wob - dt * 3);
+        t.root.quaternion.setFromAxisAngle(t.wobAxis, 0.07 * Math.sin(t.wob * 22) * t.wob);
+      }
+    } else if (t.state === "uprooting") {
+      // Dug out: the stump heaves up out of the ground, tips over, and shrinks away into wood.
+      t.timer += dt;
+      const u = Math.min(1, t.timer / 0.9), up = Math.sin(Math.min(1, u / 0.4) * Math.PI / 2);
+      t.root.position.y = t.y0 + 0.65 * up;
+      t.root.quaternion.setFromAxisAngle(t.wobAxis, 0.6 * up);
+      t.root.scale.setScalar(Math.max(0.001, 1 - smooth01((u - 0.55) / 0.45)));
+      if (u >= 1) {
+        disposeTree(t.root);
+        t.state = "gone";
+        woodland.wood += 1;
+        syncWood();
+        popText(V3(t.x, t.y0 + 1, t.z), "+1 wood");
+      }
+    }
+  }
+  stepLogs(dt);
+  stepBirds(dt);
+}
+
+// ---------- impact frame, pop-up text and the wood counter
+
+const impactCanvas = document.createElement("canvas");
+impactCanvas.style.cssText = "position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none;";
+$("stage").after(impactCanvas);
+const ictx = impactCanvas.getContext("2d");
+const popLayer = document.createElement("div");
+popLayer.style.cssText = "position: fixed; inset: 0; pointer-events: none; overflow: hidden;";
+impactCanvas.after(popLayer);
+let impact = null, impactDrawn = false;
+function sizeImpact() { impactCanvas.width = innerWidth; impactCanvas.height = innerHeight; }
+sizeImpact();
+addEventListener("resize", sizeImpact);
+function impactFrame(world, strength) {
+  if (reduced) return;
+  const v = world.clone().project(camera);
+  impact = { x: (v.x * 0.5 + 0.5) * innerWidth, y: (-v.y * 0.5 + 0.5) * innerHeight, t: 0, max: 0.16, s: strength, seed: (Math.random() * 1e6) | 0 };
+}
+function drawImpact(dt) {
+  if (impactDrawn) { ictx.clearRect(0, 0, impactCanvas.width, impactCanvas.height); impactDrawn = false; }
+  if (!impact) return;
+  impact.t += dt;
+  if (impact.t >= impact.max) { impact = null; return; }
+  const k = 1 - impact.t / impact.max, rand = mulberry32(impact.seed), { x, y } = impact, R = Math.hypot(innerWidth, innerHeight);
+  ictx.fillStyle = `rgba(255,255,255,${0.22 * k * impact.s})`;
+  ictx.fillRect(0, 0, innerWidth, innerHeight);
+  // Manga speed lines: thin wedges pointing in at the hit.
+  ictx.fillStyle = `rgba(255,255,255,${0.85 * k})`;
+  for (let i = 0; i < 34; i++) {
+    const a = rand() * Math.PI * 2, r0 = 70 + rand() * 150, w = 0.006 + rand() * 0.012;
+    ictx.beginPath();
+    ictx.moveTo(x + Math.cos(a) * r0, y + Math.sin(a) * r0);
+    ictx.lineTo(x + Math.cos(a - w) * R, y + Math.sin(a - w) * R);
+    ictx.lineTo(x + Math.cos(a + w) * R, y + Math.sin(a + w) * R);
+    ictx.fill();
+  }
+  ictx.strokeStyle = `rgba(255,255,255,${0.9 * k})`;
+  ictx.lineWidth = 1 + 4 * k;
+  ictx.beginPath(); ictx.arc(x, y, 30 + (1 - k) * 90, 0, Math.PI * 2); ictx.stroke();
+  impactDrawn = true;
+}
+function popText(world, text) {
+  const el = document.createElement("div");
+  el.textContent = text;
+  el.style.cssText = "position: absolute; left: 0; top: 0; font: 800 0.95rem var(--body); color: #fff8e6; text-shadow: 0 1px 3px rgba(60,35,10,0.7); white-space: nowrap; will-change: transform;";
+  popLayer.appendChild(el);
+  woodland.pops.push({ el, world: world.clone(), t: 0 });
+}
+function stepPops(dt) {
+  for (let k = woodland.pops.length - 1; k >= 0; k--) {
+    const p = woodland.pops[k];
+    p.t += dt;
+    if (p.t > 1.1) { p.el.remove(); woodland.pops.splice(k, 1); continue; }
+    const v = p.world.clone().add(V3(0, 0.4 + p.t * 0.9, 0)).project(camera);
+    p.el.style.transform = `translate(${(v.x * 0.5 + 0.5) * innerWidth}px, ${(-v.y * 0.5 + 0.5) * innerHeight}px) translate(-50%, -50%)`;
+    p.el.style.opacity = String(Math.min(1, (1.1 - p.t) * 3));
+  }
+}
+function syncWood() {
+  const out = $("wood-out");
+  out.textContent = String(woodland.wood);
+  out.classList.remove("bump");
+  void out.offsetWidth;   // restart the bump animation
+  out.classList.add("bump");
+}
+
+// The shape-built stand-in horse, animated by hand until horse.glb has loaded.
+function animatePlaceholder(H, dt, now, amp) {
+  const run = THREE.MathUtils.smoothstep(H.vel, 1.6, 3.6), walk = 1 - run;
+  H.phase += dt * (5 + H.vel * 2.2) * Math.min(1, H.vel * 3);
+  const p = H.phase, PI = Math.PI;
+  const legAngle = (wOff, gOff) => amp * (walk * 0.42 * Math.sin(p + wOff) + run * 0.85 * Math.sin(p + gOff));
+  H.legs.fl.rotation.x = legAngle(0, 0);
+  H.legs.br.rotation.x = legAngle(0.5, PI);
+  H.legs.fr.rotation.x = legAngle(PI, 0.6);
+  H.legs.bl.rotation.x = legAngle(PI + 0.5, PI + 0.6);
+  const bob = amp * (walk * 0.02 * Math.abs(Math.sin(p * 2)) + run * 0.09 * Math.abs(Math.sin(p)));
+  H.body.position.y = bob;
+  H.body.rotation.x = amp * run * 0.09 * Math.sin(p + 0.8);
+
+  H.graze += ((H.grazing ? 1 : 0) - H.graze) * Math.min(1, dt * 2.5);
+  H.neck.rotation.x = H.graze * 1.2 + amp * run * 0.14 * Math.sin(p + 1.2);
+  H.head.rotation.x = H.graze * 0.75 + Math.sin(now * 0.0016) * 0.03;
+  H.tail.rotation.x = 0.25 + amp * run * 0.55;
+  H.tail.rotation.z = Math.sin(now * 0.0021) * 0.28 * (1 - amp * 0.6);
+}
+
+// The hero climbs on with a little hop, then sits astride, hands forward on the reins.
+function poseRider(i, now) {
+  const M = hero.mount;
+  let seat;
+  if (M.model && M.seatIn) {
+    M.seatBone.updateWorldMatrix(true, false);
+    seat = M.seatBone.localToWorld(tmpV.copy(M.seatIn));
+  } else {
+    M.body.updateWorldMatrix(true, false);
+    seat = M.body.localToWorld(tmpV.copy(SEAT));
+  }
+  if (hero.mounting !== null) {
+    const t = Math.min(1, (now - hero.mounting) / 450), e = t * t * (3 - 2 * t);
+    hero.root.position.lerpVectors(hero.mountFrom, seat, e);
+    hero.root.position.y += Math.sin(t * Math.PI) * 0.45;
+    if (t >= 1) { hero.mounting = null; hero.riding = true; syncRideButton(); }
+  } else {
+    hero.root.position.copy(seat);
+  }
+  hero.heading = M.heading;
+  hero.root.rotation.y = M.heading;
+  hero.pos.set(hero.root.position.x, 0, hero.root.position.z);
+  hero.legL.rotation.set(-1.25, 0, -0.55);
+  hero.legR.rotation.set(-1.25, 0, 0.55);
+  hero.armL.rotation.set(-0.95, 0, -0.12);
+  hero.armR.rotation.set(-0.95, 0, 0.12);
+  hero.body.position.y = 0;
+  hero.body.rotation.x = 0.06 + (M.body && !M.model ? M.body.rotation.x * 0.6 : 0);
+  hero.head.rotation.z = 0;
+  hero.speed = 0;
+  uniforms.uWalkers.value[i].z = 0;     // the mount's shadow covers the rider
+  uniforms.uFeet.value[i].z = 0;
+}
+
+function syncRideButton() {
+  const M = hero.mount;
+  for (const b of document.querySelectorAll("[data-ride]")) {
+    const m = mounts.find((x) => x.key === b.dataset.ride), mine = m === M;
+    b.textContent = mine && hero.riding ? "Get off" : mine && hero.wantsMount ? "Walking over…" : m.label;
+    b.setAttribute("aria-pressed", String(mine && hero.riding));
+  }
+  $("hint").textContent = hero.riding
+    ? `Click or tap the grass to ${M.cfg.verb} there. Mounts can wade deeper than you can.`
+    : HINTS[mode];
+}
+function toggleRide(M) {
+  if (hero.mounting !== null) return;
+  if (hero.riding) {
+    const R = hero.mount, side = mountSide(R);
+    if (groundHeight(side.x, side.z) < WADE) { $("hint").textContent = "Too deep to get off here. Ride to shallower water first."; return; }
+    hero.riding = false;
+    hero.pos.copy(side);
+    hero.target = null;
+    hero.idle = 0;
+    R.target = null;
+    R.idle = 0;
+    R.home.copy(R.pos);
+  } else {
+    cancelJobs();
+    hero.mount = M;
+    hero.wantsMount = true;
+    hero.idle = 0;
+  }
+  syncRideButton();
+}
+document.querySelectorAll("[data-ride]").forEach((b) => b.addEventListener("click", () => toggleRide(mounts.find((m) => m.key === b.dataset.ride))));
 
 // ---------- click or tap to walk
 
@@ -855,19 +3622,85 @@ const marker = new THREE.Mesh(new THREE.RingGeometry(0.22, 0.3, 32).rotateX(-Mat
   new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false }));
 marker.position.y = 0.05;
 scene.add(marker);
-let downAt = null;
+let downAt = null, painting = null;
 renderer.domElement.addEventListener("pointerdown", (e) => { downAt = [e.clientX, e.clientY]; });
+// The point on the ground under the pointer (and the ray aimed through it).
+function pointAt(e) {
+  ndc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  return ray.ray.intersectPlane(floor, hit) ? hit.clone() : null;
+}
+// Trunks, stumps and logs, but not the canopies: grass under a tree can still be painted.
+const workHits = () => [...treeHits().filter((h) => h.geometry.type !== "SphereGeometry"), ...restingLogs().map((L) => L.mesh)];
+// Clear mode: dragging over the ground marks grass to cut instead of turning the camera. This runs in the capture
+// phase, before the camera controls see the press; a press on a trunk, stump or log stays a click.
+$("stage").addEventListener("pointerdown", (e) => {
+  if (mode !== "clear" || e.button !== 0 || !e.isPrimary) return;
+  const p = pointAt(e);
+  if (!p || ray.intersectObjects(workHits(), false).length) return;
+  painting = { last: p };
+  controls.enabled = false;
+  queueCut(p.x, p.z);
+  syncJobMarks();
+}, { capture: true });
+function endPaint() {
+  if (!painting) return false;
+  painting = null;
+  downAt = null;
+  controls.enabled = true;
+  runJobs();
+  return true;
+}
+addEventListener("pointerup", endPaint);
+addEventListener("pointercancel", endPaint);
+renderer.domElement.addEventListener("pointermove", (e) => {
+  if (painting) {
+    const p = pointAt(e);
+    if (!p) return;
+    const d = p.distanceTo(painting.last), n = Math.floor(d / 0.5);
+    for (let k = 1; k <= n; k++) { const q = painting.last.clone().lerp(p, k / n); queueCut(q.x, q.z); }
+    if (n) { painting.last = p; syncJobMarks(); }
+    return;
+  }
+  if (e.pointerType !== "mouse") return;
+  const p = pointAt(e);
+  if (mode === "plot" && p) moveGhost(p);
+  const over = ray.intersectObjects(treeHits(), false)[0], state = over?.object.userData.tree?.state;
+  const log = ray.intersectObjects(restingLogs().map((L) => L.mesh), false).length;
+  renderer.domElement.style.cursor = log || state === "standing" || state === "stump" ? "pointer" : "";
+});
 renderer.domElement.addEventListener("pointerup", (e) => {
-  if (!downAt) return;
+  if (endPaint() || !downAt) return;
   const moved = Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]);
   downAt = null;
   if (moved > 6) return;
-  ndc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
-  ray.setFromCamera(ndc, camera);
-  if (!ray.ray.intersectPlane(floor, hit)) return;
-  hero.target = new THREE.Vector3(clampField(hit.x), 0, clampField(hit.z));
-  hero.idle = 0;
-  marker.position.set(hero.target.x, 0.05, hero.target.z);
+  const ground = pointAt(e);
+  const treeHit = ray.intersectObjects(treeHits(), false)[0];
+  const logs = restingLogs(), logHit = ray.intersectObjects(logs.map((L) => L.mesh), false)[0];
+  if (logHit && !(treeHit && treeHit.distance < logHit.distance)) { fetchLog(logs.find((L) => L.mesh === logHit.object)); return; }
+  const clicked = !hero.riding && mounts.find((M) => ray.intersectObject(M.root, true).length);
+  if (treeHit && treeHit.object.userData.tree && !(clicked && ray.intersectObject(clicked.root, true)[0].distance < treeHit.distance)) {
+    clickTree(treeHit.object.userData.tree);
+    return;
+  }
+  if (clicked) { toggleRide(clicked); return; }
+  const critter = wild.find((M) => ray.intersectObject(M.root, true).length);
+  if (critter) { flashHint(critter.cfg.note); return; }
+  if (!ground) return;
+  if (mode === "plot") {
+    // A click inside a plot picks it; elsewhere it stakes one out. On touch the first tap shows where, a second
+    // tap on the same spot stakes it.
+    const P = plotAt(ground.x, ground.z);
+    if (P) { activePlot = P; syncPlotBar(); return; }
+    const before = ghostAt && { ...ghostAt };
+    moveGhost(ground);
+    if (e.pointerType === "mouse" || (before && before.x0 === ghostAt.x0 && before.z0 === ghostAt.z0 && before.n === ghostAt.n)) placePlot(ghostAt.x0, ghostAt.z0, ghostAt.n);
+    return;
+  }
+  const dest = new THREE.Vector3(clampField(ground.x), 0, clampField(ground.z));
+  if (hero.riding) { hero.mount.target = dest; hero.mount.idle = 0; }
+  else { cancelJobs(); hero.fetch = null; hero.target = dest; hero.idle = 0; if (hero.wantsMount) { hero.wantsMount = false; syncRideButton(); } }
+  marker.position.set(dest.x, 0.05, dest.z);
   marker.material.opacity = 0.9;
   marker.scale.setScalar(1);
 });
@@ -880,17 +3713,25 @@ document.querySelectorAll("[data-cam]").forEach((b) => b.addEventListener("click
   uniforms.uSeeThrough.value = follow ? 1 : 0;
   document.querySelectorAll("[data-cam]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
 }));
-camera.position.set(hero.pos.x, 7, hero.pos.z + 6.5);
+camera.position.set(hero.pos.x + 2, 7.5, hero.pos.z - 7);
 controls.target.set(hero.pos.x, 0.4, hero.pos.z);
 controls.update();
 
 const clock = new THREE.Clock();
 const lookAt = new THREE.Vector3();
-renderer.setAnimationLoop((now) => {
-  const dt = Math.min(clock.getDelta(), 0.05);
+// One step of the world: everything but drawing. `now` in ms.
+function simulate(now, dt) {
   uniforms.uTime.value = reduced ? 0 : now / 1000;
+  if (hitStop > 0) { hitStop -= dt; dt *= 0.06; }   // the freeze of an impact frame
   fadeTrample(dt);
+  mounts.forEach((M) => stepMount(M, dt, now));
+  wild.forEach((M) => stepMount(M, dt, now));
   walkers.forEach((w, i) => stepWalker(w, i, dt, now));
+  stepPet(dt);
+  stepWoodland(dt);
+  stepLand(dt);
+  stepPlots(dt);
+  stepFx(dt);
   uniforms.uHero.value.copy(hero.pos);
   trTex.needsUpdate = true;
   sun.intensity = 2.3 * uniforms.uSun.value / 1.25;
@@ -904,9 +3745,50 @@ renderer.setAnimationLoop((now) => {
     controls.target.add(lookAt);
     camera.position.add(lookAt);
   }
+}
+let simNow = 0;   // ms; runs ahead of the clock only when gmAdvance steps it
+const _shake = new THREE.Vector3();
+renderer.setAnimationLoop((now) => {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  simNow = Math.max(simNow, now);
+  simulate(simNow, dt);
   controls.update();
+  _shake.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(reduced ? 0 : camShake);
+  camera.position.add(_shake);
+  skyDome.position.copy(camera.position);
   renderer.render(scene, camera);
+  camera.position.sub(_shake);
+  camShake *= Math.exp(-dt * 10);
+  drawImpact(dt);
+  stepPops(dt);
 });
+// Debug hook for slow headless checks: step the world `seconds` ahead at 60 fps without drawing.
+window.gmCamera = (p, t) => { follow = false; camera.position.set(...p); controls.target.set(...t); controls.update(); };
+window.gmAdvance = (seconds) => { for (let i = 0; i < seconds * 60; i++) { simNow += 1000 / 60; simulate(simNow, 1 / 60); } };
 window.gmReady = () => !!blades;
 window.gmWalkTo = (x, z) => { hero.target = new THREE.Vector3(x, 0, z); hero.idle = 0; };
+window.gmPlaceHero = (x, z) => { hero.pos.set(x, 0, z); hero.target = null; hero.idle = 0; };
+window.gmRide = (key = "horse") => toggleRide(mounts.find((m) => m.key === key));
+window.gmRideTo = (x, z) => { const M = hero.mount || horse; M.target = new THREE.Vector3(x, 0, z); M.idle = 0; };
+window.gmPose = () => ({ arm: hero.armR.rotation.x, task: !!hero.task, working: hero.task?.working, swing: hero.task?.swing, queued: hero.task?.queued, tool: Object.keys(TOOLS).find((k) => TOOLS[k].visible) ?? null });
+window.gmTrees = () => woodland.trees.map((t, i) => ({ i, kind: t.kind, palette: t.palette, x: t.x, z: t.z, state: t.state, hp: t.hp }));
+window.gmMode = (m) => setMode(m);
+window.gmClear = (x, z, r = 1) => clearLand(x, z, r);
+window.gmLand = (x, z) => landAt(x, z);
+window.gmCut = (pts) => { for (const [x, z] of pts) queueCut(x, z); runJobs(); return hero.jobs.length + (hero.task ? 1 : 0); };
+window.gmJobs = () => ({ task: hero.task?.kind ?? null, queued: hero.jobs.length, kinds: hero.jobs.map((j) => j.kind).join(",") });
+window.gmPlot = (x0, z0, n = 6) => !!placePlot(x0, z0, n);
+window.gmPlots = () => plots.map((P) => ({ x0: P.x0, z0: P.z0, n: P.n, ready: P.ready, ...P.counts }));
+window.gmWorkPlot = (k = plots.length - 1) => workPlot(plots[k]);
+window.gmBushes = () => bushes.map((b) => ({ x: b.x, z: b.z, gone: b.gone, hp: b.hp }));
+window.gmFell = (i) => { const t = woodland.trees[i]; t.hp = 1; chopHit(t); };
+window.gmLogs = () => woodland.logs.map((L) => ({ x: L.mesh.position.x, y: L.mesh.position.y, z: L.mesh.position.z, state: L.state, wood: L.wood }));
+window.gmPickUp = () => { const L = nearestLog(); if (L) pickUp(L); return !!L; };
+window.gmFetch = (k = 0) => { const L = restingLogs()[k]; if (L) fetchLog(L); return !!L; };
+window.gmChop = (i) => clickTree(woodland.trees[i]);
+window.gmWood = () => woodland.wood;
+window.gmBirds = () => woodland.birds.map((b) => `${b.state}@${woodland.trees.indexOf(b.tree)}`).join(",");
+window.gmHero = () => ({ x: hero.pos.x, z: hero.pos.z });
+window.gmPet = () => ({ x: pet.pos.x, z: pet.pos.z, loaded: !!pet.model, clip: pet.clip });
+window.gmMount = (key) => { const M = [...mounts, ...wild].find((m) => m.key === key); return M && { x: M.pos.x, z: M.pos.z, loaded: !!M.model }; };
 </script>
