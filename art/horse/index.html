@@ -1,0 +1,375 @@
+<title>GM Mount Models</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700&display=swap">
+<style>
+  /* Layout: the model turns on a soft stage; one card (top-left) picks the animation and shows the asset's stats. */
+  :root {
+    --stage: #d9dde3;
+    --ink: #22301f;
+    --muted: #5e6b56;
+    --card: rgba(251, 247, 236, 0.92);
+    --line: rgba(34, 48, 31, 0.14);
+    --accent: #2e8a84;
+    --accent-ink: #ffffff;
+    --display: "Cinzel", "Trajan Pro", Georgia, serif;
+    --body: "Nunito Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --stage: #2a2f36; --ink: #eef2e6; --muted: #aab6a1; --card: rgba(22, 29, 24, 0.88); --line: rgba(238, 242, 230, 0.16);
+      --accent: #5fc9c0; --accent-ink: #0b2220; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --stage: #2a2f36; --ink: #eef2e6; --muted: #aab6a1; --card: rgba(22, 29, 24, 0.88); --line: rgba(238, 242, 230, 0.16);
+    --accent: #5fc9c0; --accent-ink: #0b2220; color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body {
+    background: var(--stage); color: var(--ink); font-family: var(--body); overflow: hidden;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  #stage { position: fixed; inset: 0; }
+  #stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+  .card {
+    position: fixed; z-index: 2;
+    top: calc(env(safe-area-inset-top, 0px) + 12px);
+    left: max(16px, env(safe-area-inset-left, 0px));
+    width: min(280px, calc(100vw - 32px));
+    display: grid; gap: 12px; padding: 14px 16px 16px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 10px 30px rgba(20, 30, 40, 0.18);
+  }
+  h1 { margin: 0; font: 700 1.1rem/1.15 var(--display); letter-spacing: 0.04em; }
+  .sub { margin: 2px 0 0; font-size: 0.78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .label { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+  .seg button { border: 0; background: transparent; color: var(--ink); padding: 8px 6px; cursor: pointer; font: 600 0.82rem var(--body); }
+  .seg button:nth-child(even) { border-left: 1px solid var(--line); }
+  .seg button:nth-child(n + 3) { border-top: 1px solid var(--line); }
+  #models { grid-template-columns: repeat(3, 1fr); }
+  #models button { border-top: 0; border-left: 0; font-size: 0.76rem; }
+  #models button + button { border-left: 1px solid var(--line); }
+  #models button:nth-child(3n + 1) { border-left: 0; }
+  #models button:nth-child(n + 4) { border-top: 1px solid var(--line); }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+  .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+  dt { color: var(--muted); }
+  dd { margin: 0; text-align: right; }
+</style>
+
+<div id="stage" aria-label="3D view of the GM horse model"></div>
+<section class="card">
+  <div>
+    <h1>Mount Models</h1>
+    <p class="sub" id="status">Loading horse.glb&hellip;</p>
+  </div>
+  <div>
+    <span class="label" id="model-label">Model</span>
+    <div class="seg" role="group" aria-labelledby="model-label" id="models">
+      <button data-model="generated" aria-pressed="true">Horse (AI)</button>
+      <button data-model="scripted" aria-pressed="false">Horse (script)</button>
+      <button data-model="thunder" aria-pressed="false">Thunder Runner</button>
+      <button data-model="serpent" aria-pressed="false">Lantern Serpent</button>
+      <button data-model="serpentBaby" aria-pressed="false">Serpent (baby)</button>
+      <button data-model="serpentTeen" aria-pressed="false">Serpent (teen)</button>
+      <button data-model="serpentElder" aria-pressed="false">Serpent (elder)</button>
+    </div>
+  </div>
+  <div>
+    <span class="label" id="anim-label">Animation</span>
+    <div class="seg" role="group" aria-labelledby="anim-label" id="anims"></div>
+  </div>
+  <div>
+    <span class="label" id="move-label">Movement</span>
+    <div class="seg" role="group" aria-labelledby="move-label">
+      <button data-move="around" aria-pressed="true">Around the stage</button>
+      <button data-move="still" aria-pressed="false">In place</button>
+    </div>
+  </div>
+  <div>
+    <span class="label" id="tail-label">Tail &amp; feather physics</span>
+    <div class="seg" role="group" aria-labelledby="tail-label">
+      <button data-tail="on" aria-pressed="true">On</button>
+      <button data-tail="off" aria-pressed="false">Off</button>
+    </div>
+  </div>
+  <dl id="stats"></dl>
+</section>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+
+const $ = (id) => document.getElementById(id);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.NeutralToneMapping;   // keeps texture colours true; AgX washed the yellow feathers out
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+$("stage").appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(getComputedStyle(document.body).backgroundColor);
+const camera = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.05, 50);
+camera.position.set(3.4, 2.2, 4.0);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0.5, 0);
+controls.enableDamping = true;
+
+scene.add(new THREE.HemisphereLight(0xeef4ff, 0x8a7a66, 1.6));
+const sun = new THREE.DirectionalLight(0xfff2de, 2.4);
+sun.position.set(3, 5, 2.5);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -4.5, right: 4.5, top: 4.5, bottom: -4.5 });
+scene.add(sun);
+const floor = new THREE.Mesh(new THREE.CircleGeometry(4.2, 96).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0x9fbf7a }));
+floor.receiveShadow = true;
+scene.add(floor);
+
+// Each model lists the bone chains that get spring physics (root bone first) and how stiff/heavy they are.
+const TAIL = { chains: [["tail1", "tail2", "tail3"]] };
+const MODELS = {
+  generated: { url: "../models/horse/generated/horse.glb", ...TAIL },
+  scripted: { url: "../models/horse/horse.glb", ...TAIL },
+  thunder: {
+    url: "../models/biped/generated/thunder.glb",
+    speeds: { Walk: 1.09, Run: 3.75 },       // printed by art/tools/rig_biped.py (speeds_m_per_s)
+    chains: [
+      { bones: ["crestF1", "crestF2"], stiffness: [0.24, 0.16], gravity: [0.03, 0.06] },
+      { bones: ["crestU1", "crestU2"], stiffness: [0.24, 0.16], gravity: [0.03, 0.06] },
+      { bones: ["crestB1", "crestB2", "crestB3"], stiffness: [0.22, 0.15, 0.1], gravity: [0.03, 0.06, 0.09] },
+      { bones: ["tailU1", "tailU2", "tailU3"], stiffness: [0.2, 0.13, 0.09], gravity: [0.08, 0.15, 0.22] },
+      ["tailC1", "tailC2", "tailC3"],
+      { bones: ["tailD1", "tailD2", "tailD3"], stiffness: [0.12, 0.08, 0.06], gravity: [0.2, 0.3, 0.4] },
+      // Single, unconnected bones: tipLength stands in for the missing child.
+      // three.js drops "." from node names, so featherArm.L loads as featherArmL.
+      { bones: ["featherArmL"], stiffness: [0.18], gravity: [0.25], tipLength: 0.2 },
+      { bones: ["featherArmR"], stiffness: [0.18], gravity: [0.25], tipLength: 0.2 },
+    ],
+  },
+  serpent: {
+    url: "../models/serpent/generated/serpent.glb",
+    speeds: { Swim: 2.2, Dash: 3.4 },        // about 0.7 of the speed the wave runs down the body (art/tools/rig_serpent.py)
+    chains: [
+      { bones: ["antennaL1", "antennaL2", "antennaL3"], stiffness: [0.2, 0.12, 0.08], gravity: [0.05, 0.12, 0.3] },
+      { bones: ["antennaR1", "antennaR2", "antennaR3"], stiffness: [0.2, 0.12, 0.08], gravity: [0.05, 0.12, 0.3] },
+    ],
+  },
+  serpentBaby: {
+    url: "../models/serpent/generated/serpent-baby.glb",
+    speeds: { Swim: 0.31, Dash: 0.48 },      // the adult's, scaled by length (0.7 m against 5 m)
+    chains: [
+      { bones: ["antennaL1", "antennaL2", "antennaL3"], stiffness: [0.2, 0.12, 0.08], gravity: [0.05, 0.12, 0.3] },
+      { bones: ["antennaR1", "antennaR2", "antennaR3"], stiffness: [0.2, 0.12, 0.08], gravity: [0.05, 0.12, 0.3] },
+    ],
+  },
+  serpentTeen: {
+    url: "../models/serpent/generated/serpent-teen.glb",
+    speeds: { Swim: 1.1, Dash: 1.7 },      // the adult's, scaled by length (2.5 m against 5 m)
+    chains: [
+      { bones: ["antennaL1", "antennaL2", "antennaL3"], stiffness: [0.2, 0.12, 0.08], gravity: [0.05, 0.12, 0.3] },
+      { bones: ["antennaR1", "antennaR2", "antennaR3"], stiffness: [0.2, 0.12, 0.08], gravity: [0.05, 0.12, 0.3] },
+    ],
+  },
+  serpentElder: {
+    url: "../models/serpent/generated/serpent-elder.glb",
+    speeds: { Swim: 2.64, Dash: 4.08 },      // the adult's, scaled by length (6 m against 5 m)
+    chains: [
+      { bones: ["antennaL1", "antennaL2", "antennaL3"], stiffness: [0.2, 0.12, 0.08], gravity: [0.05, 0.12, 0.3] },
+      { bones: ["antennaR1", "antennaR2", "antennaR3"], stiffness: [0.2, 0.12, 0.08], gravity: [0.05, 0.12, 0.3] },
+    ],
+  },
+};
+let modelKey = "generated";
+let mixer = null, current = null, shown = null;
+let actions = {};
+function loadModel(key) {
+  document.querySelectorAll("[data-model]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.model === key)));
+  $("status").textContent = "Loading\u2026";
+  modelKey = key;
+  new GLTFLoader().load(MODELS[key].url, (gltf) => onLoad(gltf, MODELS[key].url.replace("../", "art/")), undefined, onError);
+}
+document.querySelectorAll("[data-model]").forEach((b) => b.addEventListener("click", () => loadModel(b.dataset.model)));
+
+function onLoad(gltf, label) {
+  if (shown) scene.remove(shown);
+  $("anims").innerHTML = "";
+  actions = {};
+  current = null;
+  const horse = gltf.scene;
+  shown = horse;
+  let tris = 0, meshes = 0;
+  horse.traverse((o) => {
+    if (!o.isMesh) return;
+    o.castShadow = o.receiveShadow = true;
+    meshes++;
+    tris += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3;
+  });
+  scene.add(horse);
+  mixer = new THREE.AnimationMixer(horse);
+  tail = makeSprings(horse, MODELS[modelKey].chains);
+  const box = new THREE.Box3().setFromObject(horse), size = box.getSize(new THREE.Vector3());
+  for (const clip of gltf.animations) {
+    actions[clip.name] = mixer.clipAction(clip);
+    const b = document.createElement("button");
+    b.textContent = clip.name;
+    b.dataset.clip = clip.name;
+    b.setAttribute("aria-pressed", "false");
+    b.addEventListener("click", () => play(clip.name));
+    $("anims").appendChild(b);
+  }
+  play(actions.Idle ? "Idle" : gltf.animations[0]?.name);
+  $("status").textContent = label;
+  $("stats").innerHTML = `
+    <dt>Triangles</dt><dd>${Math.round(tris).toLocaleString("en-US")}</dd>
+    <dt>Meshes</dt><dd>${meshes}</dd>
+    <dt>Animations</dt><dd>${gltf.animations.length}</dd>
+    <dt>Height</dt><dd>${size.y.toFixed(2)} m</dd>
+    <dt>Length</dt><dd>${size.z.toFixed(2)} m</dd>`;
+  window.gmReady = () => true;
+}
+function onError(err) {
+  $("status").textContent = "Could not load the model. Run python3 art/serve.py and open this page from localhost.";
+  console.error(err);
+}
+const requested = new URLSearchParams(location.search).get("model");   // e.g. ?model=thunder
+loadModel(requested in MODELS ? requested : "generated");
+
+function play(name) {
+  if (!name) return;
+  const next = actions[name];
+  if (current && current !== next) current.fadeOut(0.3);
+  next.reset().fadeIn(0.3).play();
+  current = next;
+  document.querySelectorAll("[data-clip]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.clip === name)));
+}
+window.gmPlay = play;
+
+// ---------- walking round the stage: the clips play in place, so move the horse at a matching speed
+
+const SPEED = { Walk: 1.35, Gallop: 5.0 };     // horse: m/s that match each clip's stride (models can override)
+const RADIUS = 2.7;
+let moveMode = "around", speed = 0, angle = 0;
+document.querySelectorAll("[data-move]").forEach((b) => b.addEventListener("click", () => {
+  moveMode = b.dataset.move;
+  document.querySelectorAll("[data-move]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+}));
+function moveHorse(dt) {
+  const clip = current?.getClip().name;
+  const want = moveMode === "around" ? (MODELS[modelKey].speeds || SPEED)[clip] || 0 : 0;
+  speed += (want - speed) * Math.min(1, dt * 2.5);      // ease in and out so the tail feels the change
+  angle += (speed / RADIUS) * dt;
+  // Counter-clockwise round the circle (in place it just stops where it is); the model faces +Z.
+  shown.position.set(Math.cos(angle) * RADIUS, 0, Math.sin(angle) * RADIUS);
+  shown.rotation.y = Math.atan2(-Math.sin(angle), Math.cos(angle));
+}
+
+// ---------- tail physics: spring bones that lag behind the animated tail and settle back
+
+const GRAVITY = new THREE.Vector3(0, -9.8, 0);
+let tail = null, tailOn = true;
+document.querySelectorAll("[data-tail]").forEach((b) => b.addEventListener("click", () => {
+  tailOn = b.dataset.tail === "on";
+  document.querySelectorAll("[data-tail]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  if (tail) tail.reset = true;
+}));
+
+function makeSprings(root, chains) {
+  const links = [];
+  for (const chain of chains) {
+    const spec = Array.isArray(chain) ? { bones: chain } : chain;
+    const bones = spec.bones.map((n) => root.getObjectByName(n)).filter(Boolean);
+    // Each bone swings its tip; the tip is where its child starts. Bones point along their local +Y, so the
+    // last one reuses the previous length (or tipLength) along +Y.
+    bones.forEach((bone, i) => {
+      const local = bones[i + 1] ? bones[i + 1].position.clone()
+        : new THREE.Vector3(0, spec.tipLength ?? (i > 0 ? links[links.length - 1].length : bone.position.length()), 0);
+      links.push({ bone, local, length: local.length(), tip: new THREE.Vector3(), prev: new THREE.Vector3(), drag: 0.12,
+                   anim: bone.quaternion.clone(),
+                   stiffness: spec.stiffness?.[i] ?? [0.16, 0.1, 0.07][i] ?? 0.07, gravity: spec.gravity?.[i] ?? [0.15, 0.25, 0.35][i] ?? 0.35 });
+    });
+  }
+  return links.length ? { links, reset: true } : null;
+}
+
+const _head = new THREE.Vector3(), _target = new THREE.Vector3(), _q = new THREE.Quaternion(), _qi = new THREE.Quaternion();
+const _from = new THREE.Vector3(), _to = new THREE.Vector3(), _rot = new THREE.Quaternion();
+// The mixer only writes a bone when its animated value changes, so a bone held still by the clip would keep
+// last frame's spring bend and bend further every frame. Put the animated pose back before the mixer runs.
+function restoreTail() {
+  if (tail) for (const L of tail.links) L.bone.quaternion.copy(L.anim);
+}
+
+function stepTail(dt) {
+  if (tail) for (const L of tail.links) L.anim.copy(L.bone.quaternion);
+  if (!tail || !tailOn) return;
+  const k = Math.min(dt * 60, 2);             // tuned at 60 fps
+  for (const L of tail.links) {
+    L.bone.updateMatrixWorld(true);
+    L.bone.getWorldPosition(_head);
+    _target.copy(L.local).applyMatrix4(L.bone.matrixWorld);   // where the animation puts the tip
+    if (tail.reset) { L.tip.copy(_target); L.prev.copy(_target); continue; }
+    // Verlet: keep momentum, get pulled back toward the animated pose, and sag a little under gravity.
+    const vel = _to.subVectors(L.tip, L.prev).multiplyScalar(1 - L.drag);
+    L.prev.copy(L.tip);
+    L.tip.add(vel)
+      .add(_from.subVectors(_target, L.tip).multiplyScalar(L.stiffness * k))
+      .addScaledVector(GRAVITY, L.gravity * dt * dt * k);
+    // Keep the bone its own length.
+    L.tip.sub(_head).setLength(L.length).add(_head);
+    L.dev = _from.subVectors(_target, _head).angleTo(_to.subVectors(L.tip, _head));   // for gmSprings
+    // Turn the bone so its tip points at the simulated position.
+    L.bone.getWorldQuaternion(_q);
+    _qi.copy(_q).invert();
+    _from.copy(L.local).normalize();
+    _to.subVectors(L.tip, _head).applyQuaternion(_qi).normalize();
+    L.bone.quaternion.multiply(_rot.setFromUnitVectors(_from, _to));
+    L.bone.updateMatrixWorld(true);
+  }
+  tail.reset = false;
+}
+
+addEventListener("resize", () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+// Debug hook for headless checks: put the camera at an offset given in the model's own frame (it faces +Z).
+window.gmSprings = () => tail?.links.map((L) => {
+  return `${L.bone.name}:${THREE.MathUtils.radToDeg(L.dev || 0).toFixed(0)}`;
+}).join(" ");
+window.gmAim = (height) => { followHeight = height; };   // debug: what height the camera looks at
+window.gmLook = (x, y, z) => camera.position.copy(controls.target).add(new THREE.Vector3(x, y, z).applyQuaternion(shown.quaternion));
+const clock = new THREE.Clock(), _follow = new THREE.Vector3();
+let followHeight = 0.5;
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  restoreTail();
+  mixer?.update(dt);
+  if (shown) {
+    moveHorse(dt);
+    shown.updateMatrixWorld(true);
+    stepTail(dt);
+    // Keep the horse in frame: the camera glides after it, keeping whatever angle you orbited to.
+    _follow.set(shown.position.x, followHeight, shown.position.z).sub(controls.target).multiplyScalar(Math.min(1, dt * 2.5));
+    controls.target.add(_follow);
+    camera.position.add(_follow);
+  }
+  controls.update();
+  renderer.render(scene, camera);
+});
+</script>

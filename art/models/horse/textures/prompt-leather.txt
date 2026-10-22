@@ -1,0 +1,3 @@
+Seamless tileable square texture (1:1) for a cozy stylized 3D game, matching soft hand-painted storybook art. It must tile perfectly: no visible seams at any edge. Flat, even albedo with no lighting, no cast shadows, no highlights from a light source, no objects, no text, no border.
+
+Subject: saddle leather. Deep red-brown (around #7b3424) smooth polished leather with a fine subtle grain, soft colour mottling and a few faint scuffs. No stitching, no straps, no buckles.

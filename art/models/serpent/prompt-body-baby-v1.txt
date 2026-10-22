@@ -1,0 +1,9 @@
+A single clean 3D render of the BABY stage of the "Abyssal Lantern Serpent", BODY ONLY, to be used as the input image for an image-to-3D model generator and then rigged and animated. Reproduce the baby in the first attached image (its colours, spots, fins and face); use the second attached image (the adult, stretched out) ONLY for the pose, view and rendering style.
+
+Baby design: tiny and chubby, an oversized round head with huge friendly teal eyes and a small smile, lighter sky-blue skin on the back, a pale silver-lavender belly, only a few small soft glowing cyan spots, short soft rounded fin nubs and a small leaf-shaped tail fin. Short, plump body: about three and a half times as long as the head. Two tiny round bumps on top of the head where the antennae will go.
+
+NO antennae, NO lanterns, NO saddle, NO bubbles, sparks or particles.
+
+Pose: the same as the second image: floating level and stretched out almost straight, head at the left looking ahead to the left, the body running back to the right with one very gentle shallow wave, the tail fin at the far right. Nothing coils or touches itself; fins stay close to the body and clearly separated.
+
+View: the same 3/4 view as the second image, the whole body in frame with a clear margin. Plain light grey background, soft even lighting, no cast shadow, no ground plane. No text, no labels, no logos, no watermark. Wide 16:9 image.

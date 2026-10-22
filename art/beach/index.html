@@ -1,0 +1,593 @@
+<title>GM Pixel Beach</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700&display=swap">
+<style>
+  /* Layout: the pixel-rendered beach fills the screen; one floating card (top-left) holds time and pixel controls,
+     and a clock badge (top-right) shows the in-game time like the game's HUD. */
+  :root {
+    --sea: #1d3f8a;
+    --ink: #1f2a33;
+    --muted: #5b6874;
+    --card: rgba(250, 246, 236, 0.9);
+    --line: rgba(31, 42, 51, 0.15);
+    --accent: #1f9bb5;
+    --accent-ink: #ffffff;
+    --pixel: "Silkscreen", "Courier New", monospace;
+    --body: "Nunito Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink: #eef3f6; --muted: #a7b4bf; --card: rgba(18, 24, 34, 0.88); --line: rgba(238, 243, 246, 0.16);
+      --accent: #5fd0e6; --accent-ink: #0b1d24; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink: #eef3f6; --muted: #a7b4bf; --card: rgba(18, 24, 34, 0.88); --line: rgba(238, 243, 246, 0.16);
+    --accent: #5fd0e6; --accent-ink: #0b1d24; color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body {
+    background: var(--sea); color: var(--ink); font-family: var(--body); overflow: hidden;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  #stage { position: fixed; inset: 0; }
+  #stage canvas { display: block; width: 100%; height: 100%; touch-action: none; image-rendering: pixelated; }
+  .card {
+    position: fixed; z-index: 2;
+    top: calc(env(safe-area-inset-top, 0px) + 12px);
+    left: max(16px, env(safe-area-inset-left, 0px));
+    width: min(290px, calc(100vw - 32px));
+    display: grid; gap: 12px; padding: 14px 16px 16px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 10px 30px rgba(10, 20, 40, 0.25);
+  }
+  h1 { margin: 0; font: 700 1rem/1.2 var(--pixel); letter-spacing: 0.02em; }
+  .sub { margin: 2px 0 0; font-size: 0.78rem; color: var(--muted); }
+  .group { display: grid; gap: 6px; }
+  .label { display: flex; justify-content: space-between; align-items: baseline; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+  .label output { font: 700 0.8rem var(--pixel); letter-spacing: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
+  input[type="range"] { width: 100%; accent-color: var(--accent); margin: 0; }
+  .ticks { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--muted); }
+  .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; background: transparent; color: var(--ink); padding: 7px 4px; cursor: pointer; font: 600 0.8rem var(--body); }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+  .seg button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .hint { margin: 0; font-size: 0.74rem; line-height: 1.45; color: var(--muted); }
+  .clock {
+    position: fixed; z-index: 2;
+    top: calc(env(safe-area-inset-top, 0px) + 12px);
+    right: max(16px, env(safe-area-inset-right, 0px));
+    padding: 8px 12px; border-radius: 10px; text-align: right;
+    background: rgba(12, 18, 32, 0.55); color: #ffffff; font-family: var(--pixel);
+    text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
+  }
+  .clock strong { display: block; font-size: 1.4rem; line-height: 1; font-variant-numeric: tabular-nums; }
+  .clock span { font-size: 0.7rem; opacity: 0.85; }
+</style>
+
+<div id="stage" aria-label="Pixel-rendered 3D beach"></div>
+<section class="card" id="card">
+  <div>
+    <h1>Pixel Beach</h1>
+    <p class="sub">3D scene, drawn as pixel art</p>
+  </div>
+  <div class="group">
+    <label class="label" for="time">Time of day <output id="time-out">10:00</output></label>
+    <input id="time" type="range" min="0" max="24" step="0.05" value="10">
+    <div class="ticks" aria-hidden="true"><span>Night</span><span>Noon</span><span>Night</span></div>
+  </div>
+  <div class="group">
+    <span class="label" id="clock-label">Clock</span>
+    <div class="seg" role="group" aria-labelledby="clock-label">
+      <button id="clock-run" data-clock="run" aria-pressed="true">Running</button>
+      <button id="clock-stop" data-clock="stop" aria-pressed="false">Paused</button>
+    </div>
+  </div>
+  <div class="group">
+    <span class="label" id="pixel-label">Pixel size</span>
+    <div class="seg" role="group" aria-labelledby="pixel-label">
+      <button id="px-1" data-pixel="1" aria-pressed="false">Off</button>
+      <button id="px-2" data-pixel="2" aria-pressed="false">2</button>
+      <button id="px-3" data-pixel="3" aria-pressed="true">3</button>
+      <button id="px-4" data-pixel="4" aria-pressed="false">4</button>
+    </div>
+  </div>
+  <p class="hint">Click or tap the sand to walk. Drag to turn, scroll or pinch to zoom.</p>
+</section>
+<div class="clock" aria-live="off"><strong id="clock">10:00</strong><span id="phase">Morning</span></div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { Reflector } from "three/addons/objects/Reflector.js";
+
+const coarse = matchMedia("(pointer: coarse)").matches;
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const $ = (id) => document.getElementById(id);
+
+// ---------- renderer: the scene draws into a small target, then gets scaled up with hard pixel edges
+
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFShadowMap;
+$("stage").appendChild(renderer.domElement);
+
+let pixel = 3;
+const lowRes = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true });
+const post = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
+  uniforms: { tScene: { value: lowRes.texture }, uPosterize: { value: 1 } },
+  vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tScene; uniform float uPosterize;
+    varying vec2 vUv;
+    float bayer4(vec2 p) {
+      int x = int(mod(p.x, 4.0)), y = int(mod(p.y, 4.0)), i = x + y * 4;
+      float m[16] = float[16](0., 8., 2., 10., 12., 4., 14., 6., 3., 11., 1., 9., 15., 7., 13., 5.);
+      return m[i] / 16.0 - 0.5;
+    }
+    void main() {
+      gl_FragColor = texture2D(tScene, vUv);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+      // A small palette with ordered dithering gives the hand-made pixel look.
+      if (uPosterize > 0.5) {
+        vec2 cell = floor(vUv * vec2(textureSize(tScene, 0)));
+        float levels = 22.0;
+        gl_FragColor.rgb = floor(gl_FragColor.rgb * levels + 0.5 + bayer4(cell) * 0.9) / levels;
+      }
+    }`,
+  depthTest: false, depthWrite: false,
+}));
+const postScene = new THREE.Scene(), postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+postScene.add(post);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x9fd8f0, 60, 130);
+const camera = new THREE.PerspectiveCamera(20, innerWidth / innerHeight, 1, 400);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.minPolarAngle = 0.55;
+controls.maxPolarAngle = 1.05;
+controls.minDistance = 22;
+controls.maxDistance = 90;
+controls.enablePan = false;
+
+// ---------- beach shape, shared by JS and the water shader so they always agree
+
+const SEA = new THREE.Vector2(1, 0.75).normalize();     // direction toward the open sea
+function heightAt(x, z) {
+  const s = x * SEA.x + z * SEA.y;
+  let h = -0.11 * s + 0.25 * Math.sin(x * 0.21 + 1.3) * Math.sin(z * 0.17 + 0.4) + 0.06 * Math.sin(x * 0.9 + z * 0.6);
+  return Math.max(-4, Math.min(1.6, h));
+}
+const HEIGHT_GLSL = /* glsl */ `
+  uniform vec2 uSea;
+  float heightAt(vec2 p) {
+    float s = dot(p, uSea);
+    float h = -0.11 * s + 0.25 * sin(p.x * 0.21 + 1.3) * sin(p.y * 0.17 + 0.4) + 0.06 * sin(p.x * 0.9 + p.y * 0.6);
+    return clamp(h, -4.0, 1.6);
+  }
+`;
+const time = { value: 0 }, cloudAmt = { value: 1 };
+const tide = () => 0.05 * Math.sin(time.value * 0.7) + 0.02 * Math.sin(time.value * 1.9 + 1.0);
+
+// Drifting cloud shadows on everything lit by the sun (patched into the standard materials).
+const NOISE = /* glsl */ `
+  float bHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float bNoise(vec2 p) {
+    vec2 i = floor(p), f = fract(p), u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(bHash(i), bHash(i + vec2(1, 0)), u.x), mix(bHash(i + vec2(0, 1)), bHash(i + vec2(1, 1)), u.x), u.y);
+  }
+  float bFbm(vec2 p) { float v = 0.0, a = 0.5; for (int k = 0; k < 4; k++) { v += a * bNoise(p); p *= 2.03; a *= 0.5; } return v; }
+`;
+function withClouds(material) {
+  material.onBeforeCompile = (sh) => {
+    sh.uniforms.uTime = time;
+    sh.uniforms.uCloud = cloudAmt;
+    sh.vertexShader = sh.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vCloudPos;")
+      .replace("#include <project_vertex>", "#include <project_vertex>\nvCloudPos = (modelMatrix * vec4(transformed, 1.0)).xyz;");
+    sh.fragmentShader = sh.fragmentShader
+      .replace("#include <common>", "#include <common>\nuniform float uTime, uCloud;\nvarying vec3 vCloudPos;\n" + NOISE)
+      .replace("#include <aomap_fragment>", `
+        float cloud = smoothstep(0.5, 0.62, bFbm(vCloudPos.xz * 0.045 + vec2(uTime * 0.035, uTime * 0.02)));
+        reflectedLight.directDiffuse *= 1.0 - 0.45 * cloud * uCloud;
+        #include <aomap_fragment>`);
+  };
+  return material;
+}
+
+// ---------- sand
+
+{
+  const size = 140, seg = 140;
+  const g = new THREE.PlaneGeometry(size, size, seg, seg).rotateX(-Math.PI / 2);
+  const pos = g.getAttribute("position"), colors = [];
+  const dry = new THREE.Color("#ecd3a0"), dryDark = new THREE.Color("#d9bb85"), wet = new THREE.Color("#b8925f"), under = new THREE.Color("#c9b083");
+  const c = new THREE.Color();
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), z = pos.getZ(i), h = heightAt(x, z);
+    pos.setY(i, h);
+    const speck = Math.abs(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1;
+    if (h < -0.1) c.copy(under);
+    else if (h < 0.22) c.copy(wet).lerp(dry, THREE.MathUtils.smoothstep(h, 0.0, 0.22));
+    else c.copy(dry).lerp(dryDark, speck * 0.5);
+    colors.push(c.r, c.g, c.b);
+  }
+  g.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  g.computeVertexNormals();
+  const sand = new THREE.Mesh(g, withClouds(new THREE.MeshLambertMaterial({ vertexColors: true })));
+  sand.receiveShadow = true;
+  sand.name = "sand";
+  scene.add(sand);
+}
+
+// ---------- water: a planar reflector with our own shader for depth colour, foam and sparkles
+
+const water = new Reflector(new THREE.PlaneGeometry(220, 220), { textureWidth: 256, textureHeight: 256, clipBias: 0.02 });
+water.rotation.x = -Math.PI / 2;
+water.position.y = 0.08;
+water.renderOrder = 2;
+const reflTarget = water.getRenderTarget(), reflMatrix = water.material.uniforms.textureMatrix.value;
+const waterUniforms = {
+  tDiffuse: { value: reflTarget.texture }, textureMatrix: { value: reflMatrix },
+  uTime: time, uTide: { value: 0 }, uSea: { value: SEA }, uDay: { value: 1 },
+  uShallow: { value: new THREE.Color("#22c9b8") }, uMid: { value: new THREE.Color("#0c94bb") }, uDeep: { value: new THREE.Color("#163f8f") },
+  uNight: { value: new THREE.Color("#3a3f9a") }, uLamp: { value: new THREE.Vector3() }, uLampColor: { value: new THREE.Color("#ff6fb0") }, uLampOn: { value: 0 },
+};
+water.material = new THREE.ShaderMaterial({
+  uniforms: waterUniforms,
+  transparent: true,
+  depthWrite: false,
+  vertexShader: /* glsl */ `
+    uniform mat4 textureMatrix;
+    varying vec4 vRefl; varying vec3 vWorld;
+    void main() {
+      vRefl = textureMatrix * vec4(position, 1.0);
+      vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }`,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse;
+    uniform float uTime, uTide, uDay, uLampOn;
+    uniform vec3 uShallow, uMid, uDeep, uNight, uLamp, uLampColor;
+    varying vec4 vRefl; varying vec3 vWorld;
+    ${NOISE}
+    ${HEIGHT_GLSL}
+    void main() {
+      vec2 xz = vWorld.xz;
+      float d = uTide - heightAt(xz);                 // water depth here, right now
+      if (d < 0.0) discard;
+      vec2 ripple = vec2(bNoise(xz * 1.1 + uTime * 0.35), bNoise(xz * 1.1 - uTime * 0.3 + 7.0)) - 0.5;
+      vec4 r = vRefl;
+      r.xy += ripple * 0.12 * r.w;
+      vec3 refl = texture2DProj(tDiffuse, r).rgb;
+      vec3 col = mix(uShallow, uMid, smoothstep(0.0, 1.2, d));
+      col = mix(col, uDeep, smoothstep(1.0, 3.2, d));
+      col = mix(col * mix(uNight, vec3(1.0), uDay), refl, mix(0.45, 0.1, uDay));   // reflections matter most at night
+      // Foam: a ragged line where the wash meets the sand, plus bands rolling in toward the shore.
+      float edge = 1.0 - smoothstep(0.0, 0.03 + 0.04 * bNoise(xz * 3.0 + uTime), d);
+      float rolling = smoothstep(0.88, 0.95, fract(d * 1.4 - uTime * 0.33 + bNoise(xz * 0.7) * 0.7));
+      rolling *= (1.0 - smoothstep(0.2, 1.2, d)) * step(0.55, bNoise(xz * 2.6 + vec2(uTime * 0.4, 0.0)));
+      float foam = max(edge, rolling);
+      col = mix(col, vec3(1.0) * mix(0.32, 1.0, uDay), foam * 0.85);
+      // Sun glints by day; the lamp's pink pool by night.
+      col += step(0.93, bNoise(xz * 5.0 + uTime * 0.6)) * step(0.4, d) * 0.7 * uDay;
+      float lamp = exp(-dot(xz - uLamp.xz, xz - uLamp.xz) / 18.0);
+      col += uLampColor * lamp * uLampOn * 0.9;
+      float alpha = max(mix(0.55, 0.95, smoothstep(0.0, 0.9, d)), foam);
+      gl_FragColor = vec4(col, alpha);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+    }`,
+});
+scene.add(water);
+
+// ---------- props
+
+const lambert = (hex, extra = {}) => withClouds(new THREE.MeshLambertMaterial({ color: hex, ...extra }));
+function shadowed(o) { o.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } }); return o; }
+const atGround = (o, x, z, sink = 0) => { o.position.set(x, heightAt(x, z) - sink, z); scene.add(o); return o; };
+
+function palm(lean) {
+  const g = new THREE.Group(), trunk = lambert("#9a7a55"), ring = lambert("#7f6142");
+  let p = new THREE.Vector3(), dir = new THREE.Vector3(lean, 1, lean * 0.4).normalize();
+  for (let i = 0; i < 7; i++) {
+    const len = 0.75, r = 0.2 - i * 0.017;
+    const seg = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.92, r, len, 7), i % 2 ? ring : trunk);
+    seg.position.copy(p).addScaledVector(dir, len / 2);
+    seg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    g.add(seg);
+    p.addScaledVector(dir, len);
+    dir.y += 0.08; dir.x += lean * 0.12; dir.normalize();
+  }
+  const crown = new THREE.Group();
+  crown.position.copy(p);
+  const leaf = lambert("#3f9a4a", { side: THREE.DoubleSide });
+  for (let i = 0; i < 10; i++) {
+    const geo = new THREE.PlaneGeometry(0.72, 2.3, 1, 6).translate(0, 1.15, 0);
+    const lp = geo.getAttribute("position");
+    for (let k = 0; k < lp.count; k++) {
+      const y = lp.getY(k), t = y / 2.3;
+      lp.setX(k, lp.getX(k) * (1 - t * 0.85));
+      lp.setZ(k, -t * t * 1.1);   // droop toward the tip
+    }
+    geo.computeVertexNormals();
+    const m = new THREE.Mesh(geo, leaf);
+    m.rotation.set(-0.9 - (i % 2) * 0.25, (i / 10) * Math.PI * 2, 0, "YXZ");
+    crown.add(m);
+  }
+  g.add(crown);
+  g.userData.crown = crown;
+  return shadowed(g);
+}
+
+function vendingMachine(hex) {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.95, 1.95, 0.75), lambert(hex));
+  body.position.y = 0.975;
+  g.add(body);
+  const glass = new THREE.Mesh(new THREE.BoxGeometry(0.62, 1.15, 0.04), new THREE.MeshLambertMaterial({ color: "#1d2c3a", emissive: "#9fd8ff", emissiveIntensity: 0.15 }));
+  glass.position.set(-0.1, 1.2, 0.38);
+  g.add(glass);
+  const cans = ["#ff5a5a", "#ffd24a", "#5ad1ff", "#7be07b"];
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) {
+    const can = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.18, 0.04), new THREE.MeshLambertMaterial({ color: cans[(r + c) % 4], emissive: cans[(r + c) % 4], emissiveIntensity: 0.2 }));
+    can.position.set(-0.32 + c * 0.145, 0.78 + r * 0.27, 0.41);
+    g.add(can);
+  }
+  const slot = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.5, 0.05), lambert("#2a2a33"));
+  slot.position.set(0.33, 1.15, 0.38);
+  g.add(slot);
+  g.userData.glow = g.children.filter((m) => m.material.emissive);
+  return shadowed(g);
+}
+
+// Lamp post with a pink light that switches on at dusk and throws real shadows.
+const lampPost = new THREE.Group();
+{
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 3.4, 8), lambert("#d8dbe6"));
+  pole.position.y = 1.7;
+  lampPost.add(pole);
+  const head = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.16, 0.3, 10), new THREE.MeshLambertMaterial({ color: "#ffe1ef", emissive: "#ff8fc4", emissiveIntensity: 0 }));
+  head.position.y = 3.5;
+  lampPost.add(head);
+  lampPost.userData.head = head;
+  shadowed(lampPost);
+  head.castShadow = false;
+}
+const lampLight = new THREE.PointLight("#ff6fb0", 0, 16, 1.6);
+lampLight.castShadow = true;
+lampLight.shadow.mapSize.set(512, 512);
+lampLight.shadow.bias = -0.002;
+
+const palms = [palm(0.25), palm(-0.2), palm(0.35), palm(0.1)];
+atGround(palms[0], -9, -3);
+atGround(palms[1], -4, -10);
+atGround(palms[2], -14, 6);
+atGround(palms[3], 2, -14);
+const machines = [vendingMachine("#e0482f"), vendingMachine("#f07a2a")];
+atGround(machines[0], -7.5, 3.5).rotation.y = 0.6;
+atGround(machines[1], -6.4, 4.4).rotation.y = 0.6;
+atGround(lampPost, -2.5, 1.5);
+lampLight.position.set(-2.5, heightAt(-2.5, 1.5) + 3.3, 1.5);
+scene.add(lampLight);
+waterUniforms.uLamp.value.copy(lampLight.position);
+// Dark stone blocks standing in the shallows, like the reference.
+for (const [x, z, s] of [[9, 4, 1.4], [11.5, 2, 1.1], [7, 10, 1.6]]) {
+  const rock = shadowed(new THREE.Mesh(new THREE.BoxGeometry(s, s * 1.6, s), lambert("#3a4150")));
+  rock.position.set(x, heightAt(x, z) + s * 0.5, z);
+  rock.rotation.y = x;
+  scene.add(rock);
+}
+
+// ---------- hero: the same stand-in chibi as the meadow
+
+const toonRamp = new THREE.DataTexture(new Uint8Array([110, 185, 255]), 3, 1, THREE.RedFormat);
+toonRamp.minFilter = toonRamp.magFilter = THREE.NearestFilter;
+toonRamp.needsUpdate = true;
+const toon = (hex) => withClouds(new THREE.MeshToonMaterial({ color: hex, gradientMap: toonRamp }));
+function makeChibi(style) {
+  const root = new THREE.Group(), body = new THREE.Group(), head = new THREE.Group();
+  root.add(body);
+  const add = (parent, geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); parent.add(m); return m; };
+  add(body, new THREE.CapsuleGeometry(0.17, 0.16, 4, 14), toon(style.tunic), 0, 0.42, 0);
+  add(body, new THREE.CylinderGeometry(0.178, 0.178, 0.05, 18), toon("#6b4429"), 0, 0.36, 0);
+  add(body, new THREE.TorusGeometry(0.13, 0.045, 8, 18), toon(style.scarf), 0, 0.6, 0).rotation.x = Math.PI / 2;
+  head.position.y = 0.86;
+  body.add(head);
+  add(head, new THREE.SphereGeometry(0.27, 26, 18), toon("#ffd9b8"), 0, 0, 0);
+  add(head, new THREE.SphereGeometry(0.29, 26, 18, 0, Math.PI * 2, 0, Math.PI * 0.58), toon(style.hair), 0, 0.02, -0.03).rotation.x = -0.28;
+  for (const sx of [-1, 1]) add(head, new THREE.SphereGeometry(0.036, 10, 8), toon("#1d1d26"), sx * 0.095, -0.02, 0.252).scale.set(1, 1.4, 0.5);
+  const limb = (r, len, color, x, y, hand) => {
+    const pivot = new THREE.Group();
+    pivot.position.set(x, y, 0);
+    add(pivot, new THREE.CapsuleGeometry(r, len, 4, 10), toon(color), 0, -(len / 2 + r * 0.6), 0);
+    add(pivot, new THREE.SphereGeometry(r * 1.15, 10, 8), toon(hand), 0, -(len + r * 1.4), 0);
+    body.add(pivot);
+    return pivot;
+  };
+  const parts = {
+    armL: limb(0.05, 0.13, style.tunic, -0.2, 0.55, "#ffd9b8"), armR: limb(0.05, 0.13, style.tunic, 0.2, 0.55, "#ffd9b8"),
+    legL: limb(0.066, 0.1, style.pants, -0.08, 0.21, "#4a3426"), legR: limb(0.066, 0.1, style.pants, 0.08, 0.21, "#4a3426"),
+  };
+  root.scale.setScalar(1.4);
+  shadowed(root);
+  scene.add(root);
+  return { root, body, head, ...parts, pos: new THREE.Vector3(), target: null, heading: 0, speed: 0, phase: 0, idle: 0 };
+}
+const hero = makeChibi({ tunic: "#3f6fd9", scarf: "#e8643c", hair: "#2f2a3a", pants: "#5a4636" });
+hero.pos.set(-4, 0, 2);
+
+const walkable = (x, z) => heightAt(x, z) > -0.35 && Math.abs(x) < 40 && Math.abs(z) < 40;
+const angleTo = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
+function stepHero(dt, now) {
+  let moving = false;
+  if (!hero.target) {
+    hero.idle += dt;
+    if (hero.idle > 7) {
+      // Stroll along the shoreline on its own when left alone.
+      for (let i = 0; i < 12 && !hero.target; i++) {
+        const x = hero.pos.x + (Math.random() - 0.5) * 16, z = hero.pos.z + (Math.random() - 0.5) * 16;
+        if (walkable(x, z) && heightAt(x, z) < 0.6) hero.target = new THREE.Vector3(x, 0, z);
+      }
+    }
+  }
+  if (hero.target) {
+    const dx = hero.target.x - hero.pos.x, dz = hero.target.z - hero.pos.z, d = Math.hypot(dx, dz);
+    if (d < 0.06) { hero.target = null; hero.idle = 0; }
+    else {
+      const step = Math.min(d, 3.2 * dt);
+      const nx = hero.pos.x + (dx / d) * step, nz = hero.pos.z + (dz / d) * step;
+      if (walkable(nx, nz)) { hero.pos.x = nx; hero.pos.z = nz; moving = true; } else { hero.target = null; hero.idle = 0; }
+      hero.heading += angleTo(Math.atan2(dx, dz), hero.heading) * Math.min(1, dt * 10);
+    }
+  }
+  hero.speed += ((moving ? 1 : 0) - hero.speed) * Math.min(1, dt * 8);
+  hero.phase += dt * 15 * hero.speed;
+  const s = Math.sin(hero.phase), sp = hero.speed;
+  hero.legL.rotation.x = s * 0.8 * sp;
+  hero.legR.rotation.x = -s * 0.8 * sp;
+  hero.armL.rotation.x = -s * 0.7 * sp;
+  hero.armR.rotation.x = s * 0.7 * sp;
+  hero.body.position.y = Math.abs(Math.cos(hero.phase)) * 0.05 * sp;
+  hero.body.rotation.x = 0.12 * sp;
+  hero.body.scale.y = 1 + Math.sin(now * 0.0025) * 0.012 * (1 - sp);
+  hero.root.position.set(hero.pos.x, Math.max(heightAt(hero.pos.x, hero.pos.z), tide() - 0.25), hero.pos.z);
+  hero.root.rotation.y = hero.heading;
+}
+
+// ---------- lights and the day-night cycle
+
+const hemi = new THREE.HemisphereLight(0xcfeaff, 0xd9b98a, 1.0);
+const sun = new THREE.DirectionalLight(0xffffff, 2.5);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024);
+Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 1, far: 140 });
+sun.shadow.bias = -0.0006;
+scene.add(hemi, sun, sun.target);
+
+const SKY = [ // hour, sky, sun colour, sun strength, hemi strength
+  [0, "#141a46", "#8fa6ff", 0.35, 0.35], [5, "#1f2a5c", "#9fb0ff", 0.3, 0.4], [6.5, "#f6a07a", "#ffb38a", 1.4, 0.7],
+  [9, "#9fd8f0", "#fff3dc", 2.5, 1.0], [15, "#a6dcf2", "#fff6e6", 2.5, 1.0], [18, "#ff9d6b", "#ff9a63", 1.6, 0.75],
+  [19.5, "#3a3478", "#c08cff", 0.45, 0.45], [24, "#141a46", "#8fa6ff", 0.35, 0.35],
+];
+const skyCol = new THREE.Color(), sunCol = new THREE.Color(), tmpA = new THREE.Color(), tmpB = new THREE.Color();
+function setTime(hours) {
+  let i = 0;
+  while (i < SKY.length - 2 && hours > SKY[i + 1][0]) i++;
+  const [h0, s0, c0, k0, m0] = SKY[i], [h1, s1, c1, k1, m1] = SKY[i + 1];
+  const f = THREE.MathUtils.clamp((hours - h0) / (h1 - h0), 0, 1);
+  skyCol.copy(tmpA.set(s0)).lerp(tmpB.set(s1), f);
+  sunCol.copy(tmpA.set(c0)).lerp(tmpB.set(c1), f);
+  const day = THREE.MathUtils.smoothstep(Math.sin(((hours - 6) / 12) * Math.PI), -0.15, 0.25);
+  // The sun arcs east to west by day; at night the same light becomes a dim moon on the other side.
+  const a = ((hours - 6) / 12) * Math.PI, el = Math.max(0.35, Math.abs(Math.sin(a)));
+  const dir = new THREE.Vector3(-Math.cos(a), el * 1.6, 0.55).normalize();
+  sun.position.copy(hero.root.position).addScaledVector(dir, 60);
+  sun.target.position.copy(hero.root.position);
+  sun.color.copy(sunCol);
+  sun.intensity = THREE.MathUtils.lerp(k0, k1, f);
+  hemi.intensity = THREE.MathUtils.lerp(m0, m1, f);
+  hemi.color.copy(skyCol).lerp(tmpA.set("#ffffff"), 0.4);
+  scene.background = skyCol;
+  scene.fog.color.copy(skyCol);
+  cloudAmt.value = day;
+  waterUniforms.uDay.value = day;
+  const lampOn = 1 - THREE.MathUtils.smoothstep(day, 0.2, 0.6);
+  lampLight.intensity = 32 * lampOn;
+  lampPost.userData.head.material.emissiveIntensity = 2.5 * lampOn;
+  waterUniforms.uLampOn.value = lampOn;
+  for (const m of machines) for (const g of m.userData.glow) g.material.emissiveIntensity = 0.2 + 1.3 * lampOn;
+  const hh = Math.floor(hours) % 24, mm = Math.floor((hours % 1) * 60);
+  const label = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+  $("clock").textContent = label;
+  $("time-out").textContent = label;
+  $("phase").textContent = hours < 5 || hours >= 20 ? "Night" : hours < 7 ? "Dawn" : hours < 12 ? "Morning" : hours < 17 ? "Afternoon" : "Dusk";
+}
+
+// ---------- input
+
+let hours = 10, running = !reduced;
+$("time").addEventListener("input", (e) => { hours = Number(e.target.value); });
+document.querySelectorAll("[data-clock]").forEach((b) => b.addEventListener("click", () => {
+  running = b.dataset.clock === "run";
+  document.querySelectorAll("[data-clock]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+}));
+if (reduced) $("clock-stop").click();
+function setPixel(n) {
+  pixel = n;
+  post.material.uniforms.uPosterize.value = n > 1 ? 1 : 0;
+  document.querySelectorAll("[data-pixel]").forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.pixel) === n)));
+  resize();
+}
+document.querySelectorAll("[data-pixel]").forEach((b) => b.addEventListener("click", () => setPixel(Number(b.dataset.pixel))));
+
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+const sandMesh = scene.getObjectByName("sand");
+let downAt = null;
+renderer.domElement.addEventListener("pointerdown", (e) => { downAt = [e.clientX, e.clientY]; });
+renderer.domElement.addEventListener("pointerup", (e) => {
+  if (!downAt) return;
+  const moved = Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]);
+  downAt = null;
+  if (moved > 6) return;
+  ndc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const hit = ray.intersectObject(sandMesh)[0];
+  if (hit && walkable(hit.point.x, hit.point.z)) { hero.target = hit.point.clone(); hero.idle = 0; }
+});
+
+function resize() {
+  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  const w = Math.max(1, Math.floor(innerWidth / pixel)), h = Math.max(1, Math.floor(innerHeight / pixel));
+  lowRes.setSize(w, h);
+  reflTarget.setSize(w, h);
+}
+addEventListener("resize", resize);
+if (innerWidth < 520) setPixel(2); else resize();
+
+// Camera: a high three-quarter view that follows the hero.
+const offset = new THREE.Vector3(8, 24, 27);
+camera.position.copy(hero.pos).add(offset);
+controls.target.copy(hero.pos);
+controls.update();
+
+const clock = new THREE.Clock(), follow = new THREE.Vector3();
+renderer.setAnimationLoop((now) => {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  if (!reduced) time.value = now / 1000;
+  if (running) { hours = (hours + dt * 0.12) % 24; $("time").value = hours.toFixed(2); }
+  waterUniforms.uTide.value = tide();
+  stepHero(dt, now);
+  setTime(hours);
+  for (const [i, p] of palms.entries()) p.userData.crown.rotation.z = Math.sin(time.value * 1.3 + i) * 0.04;
+  follow.copy(hero.root.position).sub(controls.target).multiplyScalar(Math.min(1, dt * 3));
+  controls.target.add(follow);
+  camera.position.add(follow);
+  controls.update();
+  renderer.setRenderTarget(lowRes);
+  renderer.render(scene, camera);
+  renderer.setRenderTarget(null);
+  renderer.render(postScene, postCam);
+});
+window.gmReady = () => true;
+window.gmSetHours = (h) => { hours = h; running = false; };
+</script>

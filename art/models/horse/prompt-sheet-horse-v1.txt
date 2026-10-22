@@ -1,0 +1,7 @@
+Character model sheet for a 3D game asset: a cute stylized riding horse for a cozy fantasy MMORPG. Art style: chunky, soft, rounded storybook shapes with chibi proportions (slightly big head, short sturdy legs, round barrel body), hand-painted gradient colours, no realistic detail. It is sized for a small chibi adventurer about 1 m tall to ride.
+
+Layout: an orthographic turnaround on a plain light grey background with faint construction lines. A large left SIDE view in the centre, plus FRONT view, BACK view, TOP view, and one 3/4 perspective view. The same pose in every view: standing neutral, all four hooves flat on the ground, head up, ears forward, tail relaxed.
+
+Design: warm chestnut-brown coat with slightly darker lower legs, cream muzzle and a white blaze down the face, big friendly dark eyes, a dark brown mane in a few chunky locks and a full chunky tail, dark grey hooves. Tack: a simple rounded leather saddle in deep red-brown over a teal saddle blanket with gold trim, two stirrups, and a brown bridle with reins resting on the neck.
+
+Flat, even lighting with no cast shadows, clean readable silhouettes so a 3D modeller can build it from the sheet. Small labels under each view: SIDE, FRONT, BACK, TOP, 3/4. A thin height scale bar beside the side view marked 0 m, 0.5 m, 1.0 m, 1.5 m, with the top of the back (withers) at about 1.1 m. No other text, no logos, no watermark. Wide 16:9 image.

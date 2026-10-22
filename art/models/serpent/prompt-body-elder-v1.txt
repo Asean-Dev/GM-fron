@@ -1,0 +1,9 @@
+A single clean 3D render of the ELDER stage of the "Abyssal Lantern Serpent", BODY ONLY, to be used as the input image for an image-to-3D model generator and then rigged and animated. Reproduce the elder in the first attached image (its colours, spots, fins, coral, barnacles, tendrils and face); use the second attached image (the adult, stretched out) ONLY for the pose, view and rendering style.
+
+Elder design: very long and ancient, skin darkened to near-black indigo, the glowing spots softened to calm violet and teal, a pale silver belly, small branches of pink-red coral and a few clusters of barnacles growing along its back, long drifting jellyfish-like tendrils trailing from the chin like a beard, frayed and torn edges on the large flowing fins, and cloudy, wise, half-closed eyes. Body about nine times as long as the head. Two round antenna sockets on top of the head.
+
+NO antennae, NO lanterns, NO saddle, NO bubbles, sparks or particles.
+
+Pose: the same as the second image: floating level and stretched out almost straight, head at the left looking ahead to the left, the body running back to the right with one very gentle shallow wave, the tail fin at the far right. The chin tendrils hang down and back without wrapping around anything. Nothing coils or touches itself; fins stay close to the body and clearly separated.
+
+View: the same 3/4 view as the second image, the whole body in frame with a clear margin. Plain light grey background, soft even lighting, no cast shadow, no ground plane. No text, no labels, no logos, no watermark. Wide 16:9 image.

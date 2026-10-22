@@ -1,4 +1,4 @@
-"""Serves the art/ pages on http://localhost:8765 (town viewer at /viewer/, grass meadow at /meadow/).
+"""Serves the art/ pages on http://localhost:8765 (town viewer /viewer/, grass meadow /meadow/, pixel beach /beach/).
 
     python3 art/serve.py [port]
 
@@ -43,5 +43,5 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
-    print(f"GM art pages: http://localhost:{port}/viewer/  http://localhost:{port}/meadow/", flush=True)
+    print(f"GM art pages: http://localhost:{port}/viewer/  /meadow/  /beach/", flush=True)
     http.server.ThreadingHTTPServer(("127.0.0.1", port), partial(Handler, directory=ROOT)).serve_forever()

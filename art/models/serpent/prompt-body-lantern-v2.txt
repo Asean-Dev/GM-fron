@@ -1,0 +1,9 @@
+A single clean 3D render of the BODY ONLY of the "Abyssal Lantern Serpent" from the attached images, to be used as the input image for an image-to-3D model generator and then rigged and animated, so it must be in a neutral, stretched-out pose. Reproduce the design exactly (inky indigo-navy back, silver-lavender belly with wide belly plates, rows of glowing cyan spots, blue-to-violet jellyfish frill fins, big friendly teal eyes, two small round antenna sockets on top of the head) in the same chunky, soft, rounded storybook 3D style.
+
+NO antennae, NO lanterns, NO saddle, NO bubbles, sparks or particles.
+
+Pose: the serpent floats level, stretched out LONG and almost straight, like a swimming eel: the body is about seven times longer than it is tall, with only one very gentle, shallow wave along it. The head is at the left end, raised just a little and looking ahead to the left; the body runs back to the right, slowly tapering, and the tail ends at the far right in a soft leaf-shaped tail fin. Nothing coils, loops or folds back; no part of the body touches or overlaps another part.
+
+Fins: a low continuous frill along the top of the neck and back, a pair of small rounded fins behind the head, and soft frills along the underside of the tail. Keep every fin close to the body and clearly separated from its neighbours, so the silhouette of the body itself stays easy to read.
+
+View: 3/4 view from slightly in front and above the head, so the top of the back and one side are both visible; the whole length fits in the frame with a clear margin. Plain light grey background, soft even lighting, no cast shadow, no ground plane. No text, no labels, no logos, no watermark. Wide 16:9 image.

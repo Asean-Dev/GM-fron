@@ -1,0 +1,7 @@
+A single clean 3D render of the BODY ONLY of the "Abyssal Lantern Serpent" from the attached sheet, to be used as the input image for an image-to-3D model generator. Reproduce the body exactly (inky indigo-navy back, silver-lavender belly with wide belly plates, rows of glowing cyan spots, blue-to-violet jellyfish frill fins along the neck, back and tail, teal eyes, two small round antenna sockets on top of the head) in the same chunky, soft, rounded storybook 3D style.
+
+NO antennae, NO lanterns, NO saddle, NO bubbles, sparks or particles.
+
+View and pose: one 3/4 view from the front-left, full body, centred with a clear margin all round. The head and neck are raised in an S-curve, the body curves down and back, then the tail extends back along the ground and ends in a fin. Make it an OPEN S-curve: no part of the body touches or crosses another part, with clear empty gaps between the neck, the body and the tail, and between neighbouring fins. Draw the fins as solid, clearly shaped, slightly translucent at the very edges only, so their outline reads clearly against the background.
+
+Plain light grey background, soft even lighting from the front, no cast shadow, no ground plane. No text, no labels, no logos, no watermark. Square 1:1 image.

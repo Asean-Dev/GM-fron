@@ -1,0 +1,5 @@
+A single clean 3D render of the SADDLE ONLY of the "Abyssal Lantern Serpent" from the attached sheet, to be used as the input image for an image-to-3D model generator. Reproduce it exactly: a curved band of dark teal leather with gold trim, shaped as a hollow ring that would wrap around a round serpent body, a big pink scallop shell on top flanked by small orange coral branches, gold fittings, strands of pearls, and a few hanging glass-bubble and pearl-drop charms, in the same chunky, soft, rounded storybook 3D style.
+
+The saddle is empty: no creature, no rider. One 3/4 view from the front-left and slightly above, so the hollow inside of the ring is visible, centred with a clear margin. Charms hang straight down and do not touch each other. No bubbles, sparks or particles in the air.
+
+Plain light grey background, soft even lighting, no cast shadow, no ground plane. No text, no labels, no logos, no watermark. Square 1:1 image.

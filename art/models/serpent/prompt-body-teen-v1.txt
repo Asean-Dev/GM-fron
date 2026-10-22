@@ -1,0 +1,9 @@
+A single clean 3D render of the TEEN stage of the "Abyssal Lantern Serpent", BODY ONLY, to be used as the input image for an image-to-3D model generator and then rigged and animated. Reproduce the teen in the first attached image (its colours, spots, fins and face); use the second attached image (the adult, stretched out) ONLY for the pose, view and rendering style.
+
+Teen design: slim and playful, a medium head with big bright teal eyes, deep blue back, pale silver-lavender belly with belly plates, rows of brightly glowing cyan spots, translucent blue-to-violet jellyfish frill fins that are growing out but still shorter than the adult's, and a leaf-shaped tail fin. Body about six times as long as the head. Two small round antenna sockets on top of the head.
+
+NO antennae, NO lanterns, NO saddle, NO bubbles, sparks or particles.
+
+Pose: the same as the second image: floating level and stretched out almost straight, head at the left looking ahead to the left, the body running back to the right with one very gentle shallow wave, the tail fin at the far right. Nothing coils or touches itself; fins stay close to the body and clearly separated.
+
+View: the same 3/4 view as the second image, the whole body in frame with a clear margin. Plain light grey background, soft even lighting, no cast shadow, no ground plane. No text, no labels, no logos, no watermark. Wide 16:9 image.
